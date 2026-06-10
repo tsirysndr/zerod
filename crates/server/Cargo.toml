@@ -1,0 +1,21 @@
+[package]
+name = "zerod-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+getrandom = "0.2"
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = "0.8"
+tokio = { workspace = true }
+tonic = { workspace = true }
+tonic-reflection = { workspace = true }
+tracing = { workspace = true }
+zerod-bluetooth = { path = "../bluetooth" }
+zerod-config = { path = "../config" }
+zerod-proto = { path = "../proto" }
+zerod-stream = { path = "../stream" }
+zerod-systemd = { path = "../systemd" }

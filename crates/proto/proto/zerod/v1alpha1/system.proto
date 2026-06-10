@@ -1,0 +1,19 @@
+syntax = "proto3";
+package zerod.v1alpha1;
+
+message VersionRequest {}
+message VersionResponse {
+  string version = 1;
+  string os = 2;
+  string arch = 3;
+}
+
+message HealthRequest {}
+message HealthResponse {
+  bool ok = 1;
+}
+
+service SystemService {
+  rpc Version(VersionRequest) returns (VersionResponse);
+  rpc Health(HealthRequest) returns (HealthResponse);
+}

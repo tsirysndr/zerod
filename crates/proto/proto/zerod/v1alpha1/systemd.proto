@@ -1,0 +1,43 @@
+syntax = "proto3";
+package zerod.v1alpha1;
+
+enum UnitActiveState {
+  UNIT_ACTIVE_STATE_UNSPECIFIED = 0;
+  UNIT_ACTIVE_STATE_ACTIVE = 1;
+  UNIT_ACTIVE_STATE_RELOADING = 2;
+  UNIT_ACTIVE_STATE_INACTIVE = 3;
+  UNIT_ACTIVE_STATE_FAILED = 4;
+  UNIT_ACTIVE_STATE_ACTIVATING = 5;
+  UNIT_ACTIVE_STATE_DEACTIVATING = 6;
+}
+
+message UnitStatus {
+  string name = 1;
+  string description = 2;
+  string load_state = 3;
+  UnitActiveState active_state = 4;
+  string sub_state = 5;
+  bool enabled = 6;
+}
+
+message ListManagedUnitsRequest {}
+message ListManagedUnitsResponse {
+  repeated UnitStatus units = 1;
+}
+
+message UnitRequest { string name = 1; }   // canonical service name
+message UnitResponse {}
+
+message StatusRequestUnit { string name = 1; }
+message StatusResponseUnit { UnitStatus unit = 1; }
+
+service SystemdService {
+  rpc ListManagedUnits(ListManagedUnitsRequest) returns (ListManagedUnitsResponse);
+  rpc Status(StatusRequestUnit) returns (StatusResponseUnit);
+  rpc Start(UnitRequest)   returns (UnitResponse);
+  rpc Stop(UnitRequest)    returns (UnitResponse);
+  rpc Restart(UnitRequest) returns (UnitResponse);
+  rpc Reload(UnitRequest)  returns (UnitResponse);
+  rpc Enable(UnitRequest)  returns (UnitResponse);
+  rpc Disable(UnitRequest) returns (UnitResponse);
+}

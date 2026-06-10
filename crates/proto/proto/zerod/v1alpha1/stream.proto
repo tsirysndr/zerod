@@ -1,0 +1,57 @@
+syntax = "proto3";
+package zerod.v1alpha1;
+
+enum AudioOutput {
+  AUDIO_OUTPUT_UNSPECIFIED = 0;
+  AUDIO_OUTPUT_CPAL = 1;     // default cpal device
+  AUDIO_OUTPUT_STDOUT = 2;   // raw S16LE PCM to stdout
+  AUDIO_OUTPUT_PIPE = 3;     // raw S16LE PCM to named pipe (pipe_path)
+}
+
+enum PlayerState {
+  PLAYER_STATE_UNSPECIFIED = 0;
+  PLAYER_STATE_STOPPED = 1;
+  PLAYER_STATE_BUFFERING = 2;
+  PLAYER_STATE_PLAYING = 3;
+  PLAYER_STATE_PAUSED = 4;
+  PLAYER_STATE_ERRORED = 5;
+}
+
+message PlayRequest {
+  // HLS (.m3u8) or DASH (.mpd) URL.
+  string url = 1;
+  AudioOutput output = 2;
+  // Required when output == AUDIO_OUTPUT_PIPE.
+  optional string pipe_path = 3;
+  // Optional cpal device name; empty → default device.
+  optional string cpal_device = 4;
+}
+message PlayResponse {}
+
+message PauseRequest {}
+message PauseResponse {}
+
+message ResumeRequest {}
+message ResumeResponse {}
+
+message StopRequest {}
+message StopResponse {}
+
+message StatusRequest {}
+message StatusResponse {
+  PlayerState state = 1;
+  string url = 2;
+  int64 position_ms = 3;
+  int64 duration_ms = 4;  // -1 for live
+  bool is_live = 5;
+  optional string error = 6;
+  AudioOutput output = 7;
+}
+
+service StreamService {
+  rpc Play(PlayRequest) returns (PlayResponse);
+  rpc Pause(PauseRequest) returns (PauseResponse);
+  rpc Resume(ResumeRequest) returns (ResumeResponse);
+  rpc Stop(StopRequest) returns (StopResponse);
+  rpc Status(StatusRequest) returns (StatusResponse);
+}

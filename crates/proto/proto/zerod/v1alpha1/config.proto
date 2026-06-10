@@ -1,0 +1,43 @@
+syntax = "proto3";
+package zerod.v1alpha1;
+
+// What to do after a successful PutConfig write.
+enum PostWriteAction {
+  POST_WRITE_ACTION_UNSPECIFIED = 0;
+  POST_WRITE_ACTION_NONE = 1;
+  POST_WRITE_ACTION_RELOAD = 2;
+  POST_WRITE_ACTION_RESTART = 3;
+}
+
+message ManagedConfig {
+  string key = 1;       // logical id, e.g. "snapserver"
+  string path = 2;      // absolute file path on the server
+  string unit = 3;      // systemd unit bound to this config, empty if none
+}
+
+message ListConfigsRequest {}
+message ListConfigsResponse {
+  repeated ManagedConfig configs = 1;
+}
+
+message GetConfigRequest { string key = 1; }
+message GetConfigResponse {
+  ManagedConfig config = 1;
+  string content = 2;   // UTF-8 file content
+}
+
+message PutConfigRequest {
+  string key = 1;
+  string content = 2;
+  PostWriteAction action = 3;
+}
+message PutConfigResponse {
+  // True when the post-write action succeeded; false when no action was requested.
+  bool action_applied = 1;
+}
+
+service ConfigService {
+  rpc ListConfigs(ListConfigsRequest) returns (ListConfigsResponse);
+  rpc GetConfig(GetConfigRequest) returns (GetConfigResponse);
+  rpc PutConfig(PutConfigRequest) returns (PutConfigResponse);
+}

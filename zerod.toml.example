@@ -1,0 +1,43 @@
+# zerod.toml — copy to ./zerod.toml, $XDG_CONFIG_HOME/zerod/zerod.toml, or /etc/zerod.toml
+
+[server]
+bind = "127.0.0.1:50151"
+# Leave empty to fall back to the ZEROD_BEARER_TOKEN env var, otherwise a
+# random token is generated and logged at startup.
+bearer_token = ""
+
+[systemd]
+# Only units listed here can be controlled via the SystemdService API.
+# Acts as an allowlist so the gRPC server can't be turned into a generic
+# remote systemctl.
+units = [
+  "snapserver.service",
+  "snapclient.service",
+  "shairport-sync.service",
+  "squeezelite.service",
+]
+
+# Each [[configs]] entry maps a logical key (used as the gRPC argument) to a
+# file path on this host plus an optional systemd unit to reload/restart after
+# a successful write. Set `unit = ""` to disable the post-write action for that
+# entry.
+
+[[configs]]
+key = "snapserver"
+path = "/etc/snapserver.conf"
+unit = "snapserver.service"
+
+[[configs]]
+key = "snapclient"
+path = "/etc/default/snapclient"
+unit = "snapclient.service"
+
+[[configs]]
+key = "shairport"
+path = "/etc/shairport-sync.conf"
+unit = "shairport-sync.service"
+
+[[configs]]
+key = "squeezelite"
+path = "/etc/default/squeezelite"
+unit = "squeezelite.service"

@@ -1,0 +1,15 @@
+FROM ghcr.io/cross-rs/arm-unknown-linux-gnueabihf:main
+
+RUN dpkg --add-architecture armhf && \
+    rm -f /etc/apt/preferences.d/all-packages && \
+    apt-get update && \
+    apt-get --assume-yes install \
+        protobuf-compiler \
+        libasound2-dev:armhf \
+        libdbus-1-dev:armhf && \
+    rm -rf /var/lib/apt/lists/*
+
+ENV PKG_CONFIG_PATH=/usr/lib/arm-linux-gnueabihf/pkgconfig \
+    PKG_CONFIG_LIBDIR=/usr/lib/arm-linux-gnueabihf/pkgconfig \
+    PKG_CONFIG_SYSROOT_DIR=/ \
+    PKG_CONFIG_ALLOW_CROSS=1
