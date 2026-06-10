@@ -10,6 +10,9 @@ use std::time::Duration;
 use tokio::runtime::Runtime;
 use tokio::task::JoinHandle;
 
+#[cfg(target_os = "linux")]
+use crate::alsa_sink;
+#[cfg(not(target_os = "linux"))]
 use crate::cpal_sink;
 use crate::decoder::decode_segment;
 use crate::demux;
@@ -125,8 +128,15 @@ impl Player {
 fn build_sink(out: &AudioOutput) -> Result<Arc<dyn AudioSink>> {
     match out {
         AudioOutput::Cpal { device } => {
-            let sink = cpal_sink::build(device.clone())?;
-            Ok(sink as Arc<dyn AudioSink>)
+            // On Linux we go straight to libasound via alsa-rs to dodge
+            // cpal-alsa's mmap path (which segfaults inside the pulse
+            // plugin on Raspberry Pi OS). The proto variant stays named
+            // `Cpal` for cross-platform consistency.
+            #[cfg(target_os = "linux")]
+            let sink = alsa_sink::build(device.clone())? as Arc<dyn AudioSink>;
+            #[cfg(not(target_os = "linux"))]
+            let sink = cpal_sink::build(device.clone())? as Arc<dyn AudioSink>;
+            Ok(sink)
         }
         AudioOutput::Stdout => Ok(Arc::new(StdoutSink::new()) as Arc<dyn AudioSink>),
         AudioOutput::Pipe { path } => {

@@ -9,6 +9,9 @@
 //! Lifted from rockbox-zig/crates/hls and rewired to a trait-based output so
 //! the gRPC layer can pick `cpal | stdout | pipe` per-stream at runtime.
 
+#[cfg(target_os = "linux")]
+mod alsa_sink;
+#[cfg(not(target_os = "linux"))]
 mod cpal_sink;
 mod decoder;
 mod demux;

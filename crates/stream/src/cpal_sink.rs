@@ -57,7 +57,13 @@ impl CpalSink {
     }
 
     fn open_stream(self: &std::sync::Arc<Self>) -> Result<()> {
+        tracing::info!("stream/cpal: open_stream begin (device={:?})", self.device_name);
+
+        tracing::debug!("stream/cpal: cpal::default_host()");
         let host = cpal::default_host();
+        tracing::info!("stream/cpal: host id = {:?}", host.id());
+
+        tracing::debug!("stream/cpal: selecting output device");
         let device = match self.device_name.as_deref() {
             None | Some("") => host
                 .default_output_device()
@@ -68,7 +74,10 @@ impl CpalSink {
                 .find(|d| d.name().map(|n| n == name).unwrap_or(false))
                 .ok_or_else(|| anyhow!("cpal: device {name} not found"))?,
         };
+        let device_name = device.name().unwrap_or_else(|_| "<unnamed>".to_string());
+        tracing::info!("stream/cpal: selected device = {}", device_name);
 
+        tracing::debug!("stream/cpal: querying default_output_config()");
         let config = device
             .default_output_config()
             .context("cpal: default output config")?;
@@ -76,6 +85,12 @@ impl CpalSink {
         let stream_config: cpal::StreamConfig = config.into();
         let out_rate = stream_config.sample_rate.0;
         let out_channels = stream_config.channels as u32;
+        tracing::info!(
+            "stream/cpal: default config = {} Hz × {} ch, sample_format = {:?}",
+            out_rate,
+            out_channels,
+            sample_format
+        );
         self.out_rate.store(out_rate, Ordering::SeqCst);
         self.out_channels.store(out_channels, Ordering::SeqCst);
 
@@ -103,7 +118,9 @@ impl CpalSink {
             other => return Err(anyhow!("cpal: unsupported sample format {other:?}")),
         }
         .context("cpal: build output stream")?;
+        tracing::info!("stream/cpal: build_output_stream ok, calling stream.play()");
         stream.play().context("cpal: start stream")?;
+        tracing::info!("stream/cpal: stream.play() ok");
 
         *self.stream.lock().unwrap() = Some(StreamHolder(stream));
         tracing::info!(

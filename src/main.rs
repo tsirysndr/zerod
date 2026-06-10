@@ -83,8 +83,6 @@ enum StreamCmd {
         output: OutputArg,
         #[arg(long)]
         pipe_path: Option<String>,
-        #[arg(long)]
-        cpal_device: Option<String>,
     },
     Pause,
     Resume,
@@ -296,7 +294,7 @@ async fn run_stream(host: &str, port: u16, token: Option<String>, cmd: StreamCmd
     let ch = channel(host, port).await?;
     let mut client = pb::stream_service_client::StreamServiceClient::new(ch);
     match cmd {
-        StreamCmd::Play { url, output, pipe_path, cpal_device } => {
+        StreamCmd::Play { url, output, pipe_path } => {
             let output = match output {
                 OutputArg::Cpal => pb::AudioOutput::Cpal,
                 OutputArg::Stdout => pb::AudioOutput::Stdout,
@@ -304,7 +302,12 @@ async fn run_stream(host: &str, port: u16, token: Option<String>, cmd: StreamCmd
             } as i32;
             client
                 .play(attach_token(
-                    Request::new(pb::PlayRequest { url, output, pipe_path, cpal_device }),
+                    Request::new(pb::PlayRequest {
+                        url,
+                        output,
+                        pipe_path,
+                        cpal_device: None,
+                    }),
                     &token,
                 ))
                 .await?;
