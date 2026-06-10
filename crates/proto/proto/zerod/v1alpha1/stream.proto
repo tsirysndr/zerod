@@ -46,6 +46,17 @@ message StatusResponse {
   bool is_live = 5;
   optional string error = 6;
   AudioOutput output = 7;
+  uint32 volume_percent = 8;  // per-stream gain, 0..=100
+}
+
+message SetStreamVolumeRequest {
+  uint32 volume_percent = 1;  // 0..=100
+}
+message SetStreamVolumeResponse {}
+
+message GetStreamVolumeRequest {}
+message GetStreamVolumeResponse {
+  uint32 volume_percent = 1;
 }
 
 service StreamService {
@@ -54,4 +65,8 @@ service StreamService {
   rpc Resume(ResumeRequest) returns (ResumeResponse);
   rpc Stop(StopRequest) returns (StopResponse);
   rpc Status(StatusRequest) returns (StatusResponse);
+  // Per-stream software gain applied in the player loop before the sink.
+  // Independent of the system ALSA mixer (see VolumeService).
+  rpc SetStreamVolume(SetStreamVolumeRequest) returns (SetStreamVolumeResponse);
+  rpc GetStreamVolume(GetStreamVolumeRequest) returns (GetStreamVolumeResponse);
 }

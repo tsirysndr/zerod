@@ -30,6 +30,11 @@ Early. Pre-1.0, breaking changes expected.
   - `pipe` — same, into a named FIFO (auto-reopens on broken pipe)
 - **Systemd control** — start / stop / restart / reload / enable / disable /
   status via the system D-Bus, restricted to an allowlist. Linux-only.
+- **Volume control** — get / set volume and mute / unmute against any ALSA
+  selem (Master, PCM, …) on any card via `alsa-lib`. Works on bare ALSA and
+  on PipeWire/PulseAudio via ALSA-mixer emulation. Linux-only. Plus a
+  per-stream software gain applied in the player loop for the HLS/DASH
+  session, independent of the system mixer.
 - **Remote config edit** — atomic read/write of a fixed set of files
   (`snapserver.conf`, `shairport-sync.conf`, …), with an optional
   reload-or-restart of the bound unit on every write.
@@ -56,11 +61,11 @@ System dependencies on Linux: `protoc` (≥ 3.15), `libasound2-dev`,
 Dockerfile pins protoc 25.1 (the cross base images ship a protoc too old
 for proto3 `optional`) and installs the multiarch ALSA / D-Bus dev libs.
 
-| Use case | Triple | Command |
-|---|---|---|
+| Use case                                 | Triple                        | Command                                                      |
+| ---------------------------------------- | ----------------------------- | ------------------------------------------------------------ |
 | Raspberry Pi 1 / Zero / 2 / Pi OS 32-bit | `arm-unknown-linux-gnueabihf` | `cross build --release --target arm-unknown-linux-gnueabihf` |
-| Raspberry Pi 3 / 4 / 5 / 64-bit ARM SBCs | `aarch64-unknown-linux-gnu` | `cross build --release --target aarch64-unknown-linux-gnu` |
-| Generic Linux x86_64 (NUC, server, …) | `x86_64-unknown-linux-gnu` | `cross build --release --target x86_64-unknown-linux-gnu` |
+| Raspberry Pi 3 / 4 / 5 / 64-bit ARM SBCs | `aarch64-unknown-linux-gnu`   | `cross build --release --target aarch64-unknown-linux-gnu`   |
+| Generic Linux x86_64 (NUC, server, …)    | `x86_64-unknown-linux-gnu`    | `cross build --release --target x86_64-unknown-linux-gnu`    |
 
 After a successful build the binary lands at
 `target/<triple>/release/zerod` — scp it to the device, drop a
@@ -112,8 +117,21 @@ is printed once at startup if nothing is configured.
 
 ### Client
 
-Client subcommands default to `--host localhost --port 50151`. Override per
-call, or pass `--bearer-token` if the remote requires one.
+Client subcommands default to `--host localhost --port 50151`. Each global
+flag also reads from an env var so you can pin the target once per shell
+session and skip the flags entirely:
+
+| Flag             | Env var              |
+| ---------------- | -------------------- |
+| `--host`         | `ZEROD_HOST`         |
+| `--port`         | `ZEROD_PORT`         |
+| `--bearer-token` | `ZEROD_BEARER_TOKEN` |
+
+```
+export ZEROD_HOST=pi.lan
+export ZEROD_BEARER_TOKEN="$(cat ~/.zerod-token)"
+zerod systemd status snapserver.service     # uses pi.lan + token from env
+```
 
 ```
 zerod bluetooth scan --timeout-secs 5
@@ -126,6 +144,16 @@ zerod stream stop
 
 zerod systemd list
 zerod systemd restart snapserver.service
+
+zerod volume list                          # all ALSA selems on default card
+zerod volume get                           # Master on default card
+zerod volume set 70                        # Master → 70%
+zerod volume set 50 --control PCM          # specific control
+zerod volume mute
+zerod volume unmute
+
+zerod stream volume set 80                 # per-stream gain (HLS/DASH session)
+zerod stream volume get
 
 zerod config list
 zerod config get snapserver

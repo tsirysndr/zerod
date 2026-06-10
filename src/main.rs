@@ -23,15 +23,15 @@ struct Cli {
     config: Option<PathBuf>,
 
     /// Client mode: target server host. Ignored for `serve`.
-    #[arg(long, global = true, default_value = "localhost")]
+    #[arg(long, global = true, env = "ZEROD_HOST", default_value = "localhost")]
     host: String,
 
     /// Client mode: target server port. Ignored for `serve`.
-    #[arg(long, global = true, default_value_t = 50151)]
+    #[arg(long, global = true, env = "ZEROD_PORT", default_value_t = 50151)]
     port: u16,
 
     /// Client mode: bearer token to send.
-    #[arg(long, global = true)]
+    #[arg(long, global = true, env = "ZEROD_BEARER_TOKEN")]
     bearer_token: Option<String>,
 
     #[command(subcommand)]
@@ -57,6 +57,9 @@ enum Command {
     /// Server version / health (client).
     #[command(subcommand)]
     System(SystemCmd),
+    /// System volume control via ALSA mixer (client).
+    #[command(subcommand)]
+    Volume(VolumeCmd),
 }
 
 #[derive(Subcommand)]
@@ -87,6 +90,57 @@ enum StreamCmd {
     Resume,
     Stop,
     Status,
+    /// Per-stream software gain (0..=100), independent of the system mixer.
+    #[command(subcommand)]
+    Volume(StreamVolumeCmd),
+}
+
+#[derive(Subcommand)]
+enum StreamVolumeCmd {
+    Get,
+    Set { percent: u32 },
+}
+
+#[derive(Subcommand)]
+enum VolumeCmd {
+    /// List ALSA selems on a card (default card if --card omitted).
+    List {
+        #[arg(long)]
+        card: Option<String>,
+    },
+    Get {
+        #[arg(long)]
+        card: Option<String>,
+        #[arg(long)]
+        control: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        index: u32,
+    },
+    Set {
+        percent: u32,
+        #[arg(long)]
+        card: Option<String>,
+        #[arg(long)]
+        control: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        index: u32,
+    },
+    Mute {
+        #[arg(long)]
+        card: Option<String>,
+        #[arg(long)]
+        control: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        index: u32,
+    },
+    Unmute {
+        #[arg(long)]
+        card: Option<String>,
+        #[arg(long)]
+        control: Option<String>,
+        #[arg(long, default_value_t = 0)]
+        index: u32,
+    },
 }
 
 #[derive(Clone, Copy, clap::ValueEnum)]
@@ -153,6 +207,7 @@ async fn main() -> Result<()> {
         Some(Command::Systemd(cmd)) => run_systemd(&cli.host, cli.port, cli.bearer_token, cmd).await,
         Some(Command::Config(cmd)) => run_config(&cli.host, cli.port, cli.bearer_token, cmd).await,
         Some(Command::System(cmd)) => run_system(&cli.host, cli.port, cli.bearer_token, cmd).await,
+        Some(Command::Volume(cmd)) => run_volume(&cli.host, cli.port, cli.bearer_token, cmd).await,
     }
 }
 
@@ -275,9 +330,100 @@ async fn run_stream(host: &str, port: u16, token: Option<String>, cmd: StreamCmd
             let state = pb::PlayerState::try_from(r.state).unwrap_or(pb::PlayerState::Unspecified);
             let out = pb::AudioOutput::try_from(r.output).unwrap_or(pb::AudioOutput::Unspecified);
             println!(
-                "state={state:?} url={} position_ms={} duration_ms={} is_live={} output={out:?} error={:?}",
-                r.url, r.position_ms, r.duration_ms, r.is_live, r.error,
+                "state={state:?} url={} position_ms={} duration_ms={} is_live={} output={out:?} volume={}% error={:?}",
+                r.url, r.position_ms, r.duration_ms, r.is_live, r.volume_percent, r.error,
             );
+        }
+        StreamCmd::Volume(cmd) => match cmd {
+            StreamVolumeCmd::Get => {
+                let r = client
+                    .get_stream_volume(attach_token(Request::new(pb::GetStreamVolumeRequest {}), &token))
+                    .await?
+                    .into_inner();
+                println!("{}%", r.volume_percent);
+            }
+            StreamVolumeCmd::Set { percent } => {
+                client
+                    .set_stream_volume(attach_token(
+                        Request::new(pb::SetStreamVolumeRequest { volume_percent: percent }),
+                        &token,
+                    ))
+                    .await?;
+                println!("ok");
+            }
+        },
+    }
+    Ok(())
+}
+
+async fn run_volume(host: &str, port: u16, token: Option<String>, cmd: VolumeCmd) -> Result<()> {
+    let ch = channel(host, port).await?;
+    let mut client = pb::volume_service_client::VolumeServiceClient::new(ch);
+    let mk = |card: Option<String>, control: Option<String>, index: u32| pb::MixerSelector {
+        card: card.unwrap_or_default(),
+        control: control.unwrap_or_default(),
+        index,
+    };
+    match cmd {
+        VolumeCmd::List { card } => {
+            let r = client
+                .list_mixers(attach_token(Request::new(pb::ListMixersRequest { card }), &token))
+                .await?
+                .into_inner();
+            for m in r.mixers {
+                println!(
+                    "{:20}  index={}  volume={}  switch={}",
+                    m.control, m.index, m.has_volume, m.has_switch
+                );
+            }
+        }
+        VolumeCmd::Get { card, control, index } => {
+            let r = client
+                .get_volume(attach_token(
+                    Request::new(pb::GetVolumeRequest { mixer: Some(mk(card, control, index)) }),
+                    &token,
+                ))
+                .await?
+                .into_inner();
+            if let Some(s) = r.status {
+                println!("{}%  muted={}", s.volume_percent, s.muted);
+            }
+        }
+        VolumeCmd::Set { percent, card, control, index } => {
+            client
+                .set_volume(attach_token(
+                    Request::new(pb::SetVolumeRequest {
+                        mixer: Some(mk(card, control, index)),
+                        volume_percent: percent,
+                    }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
+        }
+        VolumeCmd::Mute { card, control, index } => {
+            client
+                .set_mute(attach_token(
+                    Request::new(pb::SetMuteRequest {
+                        mixer: Some(mk(card, control, index)),
+                        muted: true,
+                    }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
+        }
+        VolumeCmd::Unmute { card, control, index } => {
+            client
+                .set_mute(attach_token(
+                    Request::new(pb::SetMuteRequest {
+                        mixer: Some(mk(card, control, index)),
+                        muted: false,
+                    }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
         }
     }
     Ok(())

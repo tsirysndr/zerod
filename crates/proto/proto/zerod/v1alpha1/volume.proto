@@ -1,0 +1,54 @@
+syntax = "proto3";
+package zerod.v1alpha1;
+
+message MixerSelector {
+  // ALSA card name. Empty → "default".
+  string card = 1;
+  // ALSA selem name. Empty → "Master" (server falls back to "PCM" if
+  // "Master" doesn't exist on the card).
+  string control = 2;
+  // Selem index, almost always 0.
+  uint32 index = 3;
+}
+
+message MixerInfo {
+  string card = 1;
+  string control = 2;
+  uint32 index = 3;
+  bool has_volume = 4;
+  bool has_switch = 5;
+}
+
+message VolumeStatus {
+  uint32 volume_percent = 1;  // 0..=100
+  bool muted = 2;
+}
+
+message ListMixersRequest {
+  optional string card = 1;
+}
+message ListMixersResponse {
+  repeated MixerInfo mixers = 1;
+}
+
+message GetVolumeRequest { MixerSelector mixer = 1; }
+message GetVolumeResponse { VolumeStatus status = 1; }
+
+message SetVolumeRequest {
+  MixerSelector mixer = 1;
+  uint32 volume_percent = 2;  // 0..=100
+}
+message SetVolumeResponse {}
+
+message SetMuteRequest {
+  MixerSelector mixer = 1;
+  bool muted = 2;
+}
+message SetMuteResponse {}
+
+service VolumeService {
+  rpc ListMixers(ListMixersRequest) returns (ListMixersResponse);
+  rpc GetVolume(GetVolumeRequest) returns (GetVolumeResponse);
+  rpc SetVolume(SetVolumeRequest) returns (SetVolumeResponse);
+  rpc SetMute(SetMuteRequest) returns (SetMuteResponse);
+}

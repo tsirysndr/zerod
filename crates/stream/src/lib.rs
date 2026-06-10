@@ -19,5 +19,7 @@ mod player;
 mod sink;
 
 pub use manifest::{is_hls_or_dash_url, ManifestKind};
-pub use player::{pause, play, resume, status, stop, PlayConfig, PlayerState, Status};
+pub use player::{
+    pause, play, resume, set_volume, status, stop, volume, PlayConfig, PlayerState, Status,
+};
 pub use sink::{AudioOutput, AudioSink};

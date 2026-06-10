@@ -6,6 +6,7 @@ mod settings;
 mod stream;
 mod system;
 mod systemd;
+mod volume;
 
 pub use settings::{load_settings, Settings};
 
@@ -17,6 +18,7 @@ use zerod_proto::v1alpha1::{
     bluetooth_service_server::BluetoothServiceServer,
     config_service_server::ConfigServiceServer, stream_service_server::StreamServiceServer,
     system_service_server::SystemServiceServer, systemd_service_server::SystemdServiceServer,
+    volume_service_server::VolumeServiceServer,
 };
 
 pub async fn serve(settings: Settings) -> Result<()> {
@@ -69,6 +71,10 @@ pub async fn serve(settings: Settings) -> Result<()> {
         ))
         .add_service(ConfigServiceServer::with_interceptor(
             config::ConfigSvc::new(registry, allow),
+            interceptor.clone(),
+        ))
+        .add_service(VolumeServiceServer::with_interceptor(
+            volume::VolumeSvc::default(),
             interceptor,
         ))
         .serve(addr)

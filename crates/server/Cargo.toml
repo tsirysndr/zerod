@@ -19,3 +19,4 @@ zerod-config = { path = "../config" }
 zerod-proto = { path = "../proto" }
 zerod-stream = { path = "../stream" }
 zerod-systemd = { path = "../systemd" }
+zerod-volume = { path = "../volume" }

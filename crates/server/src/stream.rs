@@ -1,8 +1,9 @@
 use tonic::{Request, Response, Status};
 use zerod_proto::v1alpha1::{
-    stream_service_server::StreamService, AudioOutput as ProtoOutput, PauseRequest, PauseResponse,
-    PlayRequest, PlayResponse, PlayerState as ProtoState, ResumeRequest, ResumeResponse,
-    StatusRequest, StatusResponse, StopRequest, StopResponse,
+    stream_service_server::StreamService, AudioOutput as ProtoOutput, GetStreamVolumeRequest,
+    GetStreamVolumeResponse, PauseRequest, PauseResponse, PlayRequest, PlayResponse,
+    PlayerState as ProtoState, ResumeRequest, ResumeResponse, SetStreamVolumeRequest,
+    SetStreamVolumeResponse, StatusRequest, StatusResponse, StopRequest, StopResponse,
 };
 use zerod_stream::{AudioOutput, PlayConfig, PlayerState};
 
@@ -93,6 +94,25 @@ impl StreamService for StreamSvc {
             is_live: s.is_live,
             error: s.error,
             output: map_output_back(&s.output) as i32,
+            volume_percent: s.volume_percent,
+        }))
+    }
+
+    async fn set_stream_volume(
+        &self,
+        req: Request<SetStreamVolumeRequest>,
+    ) -> Result<Response<SetStreamVolumeResponse>, Status> {
+        let pct = req.into_inner().volume_percent;
+        zerod_stream::set_volume(pct);
+        Ok(Response::new(SetStreamVolumeResponse {}))
+    }
+
+    async fn get_stream_volume(
+        &self,
+        _req: Request<GetStreamVolumeRequest>,
+    ) -> Result<Response<GetStreamVolumeResponse>, Status> {
+        Ok(Response::new(GetStreamVolumeResponse {
+            volume_percent: zerod_stream::volume(),
         }))
     }
 }

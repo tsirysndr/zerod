@@ -4,7 +4,7 @@ use anyhow::{anyhow, Result};
 use bytes::Bytes;
 use once_cell::sync::Lazy;
 use std::collections::VecDeque;
-use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU8, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI64, AtomicU32, AtomicU8, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio::runtime::Runtime;
@@ -52,6 +52,30 @@ pub struct Status {
     pub is_live: bool,
     pub error: Option<String>,
     pub output: AudioOutput,
+    pub volume_percent: u32,
+}
+
+/// Player volume state shared with the runtime. We store volume as an
+/// integer 0..=100 to dodge the floating-point atomic dance — gain conversion
+/// happens at sample-apply time.
+static GLOBAL_VOLUME: AtomicU32 = AtomicU32::new(100);
+
+fn apply_gain(samples: &mut [i16], volume_percent: u32) {
+    if volume_percent >= 100 {
+        return;
+    }
+    if volume_percent == 0 {
+        for s in samples {
+            *s = 0;
+        }
+        return;
+    }
+    let num = volume_percent as i32;
+    for s in samples {
+        // saturating_mul keeps us away from i32 overflow on extreme samples;
+        // the divide by 100 stays inside i16's range.
+        *s = ((*s as i32).saturating_mul(num) / 100) as i16;
+    }
 }
 
 struct Player {
@@ -301,7 +325,14 @@ async fn run_player_inner(player: &Arc<Player>) -> Result<()> {
             while player.paused.load(Ordering::SeqCst) && !player.stop_flag.load(Ordering::SeqCst) {
                 tokio::time::sleep(Duration::from_millis(50)).await;
             }
-            player.sink.write(window)?;
+            let vol = GLOBAL_VOLUME.load(Ordering::Relaxed);
+            if vol >= 100 {
+                player.sink.write(window)?;
+            } else {
+                let mut scratch = window.to_vec();
+                apply_gain(&mut scratch, vol);
+                player.sink.write(&scratch)?;
+            }
             let frames_pushed = window.len() / ch;
             let ms = (frames_pushed as i64 * 1000) / decoded.sample_rate.max(1) as i64;
             player.position_ms.fetch_add(ms, Ordering::SeqCst);
@@ -391,6 +422,7 @@ pub fn stop() -> bool {
 }
 
 pub fn status() -> Status {
+    let volume_percent = GLOBAL_VOLUME.load(Ordering::Relaxed);
     if let Some(p) = current() {
         Status {
             state: p.state(),
@@ -400,6 +432,7 @@ pub fn status() -> Status {
             is_live: p.is_live.load(Ordering::SeqCst),
             error: p.last_error.lock().unwrap().clone(),
             output: p.output.clone(),
+            volume_percent,
         }
     } else {
         Status {
@@ -410,6 +443,18 @@ pub fn status() -> Status {
             is_live: false,
             error: None,
             output: AudioOutput::Cpal { device: None },
+            volume_percent,
         }
     }
+}
+
+/// Set the per-stream gain. `percent` is clamped to 0..=100.
+pub fn set_volume(percent: u32) {
+    let p = percent.min(100);
+    GLOBAL_VOLUME.store(p, Ordering::Relaxed);
+    tracing::info!("stream: set volume to {}%", p);
+}
+
+pub fn volume() -> u32 {
+    GLOBAL_VOLUME.load(Ordering::Relaxed)
 }

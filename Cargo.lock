@@ -4224,6 +4224,7 @@ dependencies = [
  "zerod-proto",
  "zerod-stream",
  "zerod-systemd",
+ "zerod-volume",
 ]
 
 [[package]]
@@ -4254,6 +4255,16 @@ dependencies = [
  "tokio",
  "tracing",
  "zbus",
+]
+
+[[package]]
+name = "zerod-volume"
+version = "0.1.0"
+dependencies = [
+ "alsa",
+ "anyhow",
+ "serde",
+ "tracing",
 ]
 
 [[package]]

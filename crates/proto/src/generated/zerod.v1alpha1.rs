@@ -771,6 +771,24 @@ pub struct StatusResponse {
     pub error: ::core::option::Option<::prost::alloc::string::String>,
     #[prost(enumeration = "AudioOutput", tag = "7")]
     pub output: i32,
+    /// per-stream gain, 0..=100
+    #[prost(uint32, tag = "8")]
+    pub volume_percent: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetStreamVolumeRequest {
+    /// 0..=100
+    #[prost(uint32, tag = "1")]
+    pub volume_percent: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetStreamVolumeResponse {}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetStreamVolumeRequest {}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetStreamVolumeResponse {
+    #[prost(uint32, tag = "1")]
+    pub volume_percent: u32,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
 #[repr(i32)]
@@ -1041,6 +1059,60 @@ pub mod stream_service_client {
                 .insert(GrpcMethod::new("zerod.v1alpha1.StreamService", "Status"));
             self.inner.unary(req, path, codec).await
         }
+        /// Per-stream software gain applied in the player loop before the sink.
+        /// Independent of the system ALSA mixer (see VolumeService).
+        pub async fn set_stream_volume(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetStreamVolumeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetStreamVolumeResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.StreamService/SetStreamVolume",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.StreamService", "SetStreamVolume"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_stream_volume(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetStreamVolumeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetStreamVolumeResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.StreamService/GetStreamVolume",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.StreamService", "GetStreamVolume"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -1076,6 +1148,22 @@ pub mod stream_service_server {
             &self,
             request: tonic::Request<super::StatusRequest>,
         ) -> std::result::Result<tonic::Response<super::StatusResponse>, tonic::Status>;
+        /// Per-stream software gain applied in the player loop before the sink.
+        /// Independent of the system ALSA mixer (see VolumeService).
+        async fn set_stream_volume(
+            &self,
+            request: tonic::Request<super::SetStreamVolumeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetStreamVolumeResponse>,
+            tonic::Status,
+        >;
+        async fn get_stream_volume(
+            &self,
+            request: tonic::Request<super::GetStreamVolumeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetStreamVolumeResponse>,
+            tonic::Status,
+        >;
     }
     #[derive(Debug)]
     pub struct StreamServiceServer<T> {
@@ -1360,6 +1448,98 @@ pub mod stream_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = StatusSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.StreamService/SetStreamVolume" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetStreamVolumeSvc<T: StreamService>(pub Arc<T>);
+                    impl<
+                        T: StreamService,
+                    > tonic::server::UnaryService<super::SetStreamVolumeRequest>
+                    for SetStreamVolumeSvc<T> {
+                        type Response = super::SetStreamVolumeResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetStreamVolumeRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as StreamService>::set_stream_volume(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetStreamVolumeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.StreamService/GetStreamVolume" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetStreamVolumeSvc<T: StreamService>(pub Arc<T>);
+                    impl<
+                        T: StreamService,
+                    > tonic::server::UnaryService<super::GetStreamVolumeRequest>
+                    for GetStreamVolumeSvc<T> {
+                        type Response = super::GetStreamVolumeResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetStreamVolumeRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as StreamService>::get_stream_volume(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetStreamVolumeSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -3191,6 +3371,601 @@ pub mod system_service_server {
     /// Generated gRPC service name
     pub const SERVICE_NAME: &str = "zerod.v1alpha1.SystemService";
     impl<T> tonic::server::NamedService for SystemServiceServer<T> {
+        const NAME: &'static str = SERVICE_NAME;
+    }
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MixerSelector {
+    /// ALSA card name. Empty → "default".
+    #[prost(string, tag = "1")]
+    pub card: ::prost::alloc::string::String,
+    /// ALSA selem name. Empty → "Master" (server falls back to "PCM" if
+    /// "Master" doesn't exist on the card).
+    #[prost(string, tag = "2")]
+    pub control: ::prost::alloc::string::String,
+    /// Selem index, almost always 0.
+    #[prost(uint32, tag = "3")]
+    pub index: u32,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct MixerInfo {
+    #[prost(string, tag = "1")]
+    pub card: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub control: ::prost::alloc::string::String,
+    #[prost(uint32, tag = "3")]
+    pub index: u32,
+    #[prost(bool, tag = "4")]
+    pub has_volume: bool,
+    #[prost(bool, tag = "5")]
+    pub has_switch: bool,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct VolumeStatus {
+    /// 0..=100
+    #[prost(uint32, tag = "1")]
+    pub volume_percent: u32,
+    #[prost(bool, tag = "2")]
+    pub muted: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListMixersRequest {
+    #[prost(string, optional, tag = "1")]
+    pub card: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListMixersResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub mixers: ::prost::alloc::vec::Vec<MixerInfo>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetVolumeRequest {
+    #[prost(message, optional, tag = "1")]
+    pub mixer: ::core::option::Option<MixerSelector>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetVolumeResponse {
+    #[prost(message, optional, tag = "1")]
+    pub status: ::core::option::Option<VolumeStatus>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetVolumeRequest {
+    #[prost(message, optional, tag = "1")]
+    pub mixer: ::core::option::Option<MixerSelector>,
+    /// 0..=100
+    #[prost(uint32, tag = "2")]
+    pub volume_percent: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetVolumeResponse {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetMuteRequest {
+    #[prost(message, optional, tag = "1")]
+    pub mixer: ::core::option::Option<MixerSelector>,
+    #[prost(bool, tag = "2")]
+    pub muted: bool,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetMuteResponse {}
+/// Generated client implementations.
+pub mod volume_service_client {
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
+    use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
+    #[derive(Debug, Clone)]
+    pub struct VolumeServiceClient<T> {
+        inner: tonic::client::Grpc<T>,
+    }
+    impl VolumeServiceClient<tonic::transport::Channel> {
+        /// Attempt to create a new client by connecting to a given endpoint.
+        pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
+        where
+            D: TryInto<tonic::transport::Endpoint>,
+            D::Error: Into<StdError>,
+        {
+            let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
+            Ok(Self::new(conn))
+        }
+    }
+    impl<T> VolumeServiceClient<T>
+    where
+        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T::Error: Into<StdError>,
+        T::ResponseBody: Body<Data = Bytes> + std::marker::Send + 'static,
+        <T::ResponseBody as Body>::Error: Into<StdError> + std::marker::Send,
+    {
+        pub fn new(inner: T) -> Self {
+            let inner = tonic::client::Grpc::new(inner);
+            Self { inner }
+        }
+        pub fn with_origin(inner: T, origin: Uri) -> Self {
+            let inner = tonic::client::Grpc::with_origin(inner, origin);
+            Self { inner }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> VolumeServiceClient<InterceptedService<T, F>>
+        where
+            F: tonic::service::Interceptor,
+            T::ResponseBody: Default,
+            T: tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+                Response = http::Response<
+                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                >,
+            >,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+        {
+            VolumeServiceClient::new(InterceptedService::new(inner, interceptor))
+        }
+        /// Compress requests with the given encoding.
+        ///
+        /// This requires the server to support it otherwise it might respond with an
+        /// error.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.send_compressed(encoding);
+            self
+        }
+        /// Enable decompressing responses.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.accept_compressed(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_decoding_message_size(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_encoding_message_size(limit);
+            self
+        }
+        pub async fn list_mixers(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListMixersRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListMixersResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.VolumeService/ListMixers",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("zerod.v1alpha1.VolumeService", "ListMixers"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn get_volume(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetVolumeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetVolumeResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.VolumeService/GetVolume",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("zerod.v1alpha1.VolumeService", "GetVolume"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_volume(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetVolumeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetVolumeResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.VolumeService/SetVolume",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("zerod.v1alpha1.VolumeService", "SetVolume"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_mute(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetMuteRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetMuteResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.VolumeService/SetMute",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("zerod.v1alpha1.VolumeService", "SetMute"));
+            self.inner.unary(req, path, codec).await
+        }
+    }
+}
+/// Generated server implementations.
+pub mod volume_service_server {
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
+    use tonic::codegen::*;
+    /// Generated trait containing gRPC methods that should be implemented for use with VolumeServiceServer.
+    #[async_trait]
+    pub trait VolumeService: std::marker::Send + std::marker::Sync + 'static {
+        async fn list_mixers(
+            &self,
+            request: tonic::Request<super::ListMixersRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListMixersResponse>,
+            tonic::Status,
+        >;
+        async fn get_volume(
+            &self,
+            request: tonic::Request<super::GetVolumeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetVolumeResponse>,
+            tonic::Status,
+        >;
+        async fn set_volume(
+            &self,
+            request: tonic::Request<super::SetVolumeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetVolumeResponse>,
+            tonic::Status,
+        >;
+        async fn set_mute(
+            &self,
+            request: tonic::Request<super::SetMuteRequest>,
+        ) -> std::result::Result<tonic::Response<super::SetMuteResponse>, tonic::Status>;
+    }
+    #[derive(Debug)]
+    pub struct VolumeServiceServer<T> {
+        inner: Arc<T>,
+        accept_compression_encodings: EnabledCompressionEncodings,
+        send_compression_encodings: EnabledCompressionEncodings,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
+    }
+    impl<T> VolumeServiceServer<T> {
+        pub fn new(inner: T) -> Self {
+            Self::from_arc(Arc::new(inner))
+        }
+        pub fn from_arc(inner: Arc<T>) -> Self {
+            Self {
+                inner,
+                accept_compression_encodings: Default::default(),
+                send_compression_encodings: Default::default(),
+                max_decoding_message_size: None,
+                max_encoding_message_size: None,
+            }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> InterceptedService<Self, F>
+        where
+            F: tonic::service::Interceptor,
+        {
+            InterceptedService::new(Self::new(inner), interceptor)
+        }
+        /// Enable decompressing requests with the given encoding.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.accept_compression_encodings.enable(encoding);
+            self
+        }
+        /// Compress responses with the given encoding, if the client supports it.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.send_compression_encodings.enable(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.max_decoding_message_size = Some(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.max_encoding_message_size = Some(limit);
+            self
+        }
+    }
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for VolumeServiceServer<T>
+    where
+        T: VolumeService,
+        B: Body + std::marker::Send + 'static,
+        B::Error: Into<StdError> + std::marker::Send + 'static,
+    {
+        type Response = http::Response<tonic::body::BoxBody>;
+        type Error = std::convert::Infallible;
+        type Future = BoxFuture<Self::Response, Self::Error>;
+        fn poll_ready(
+            &mut self,
+            _cx: &mut Context<'_>,
+        ) -> Poll<std::result::Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn call(&mut self, req: http::Request<B>) -> Self::Future {
+            match req.uri().path() {
+                "/zerod.v1alpha1.VolumeService/ListMixers" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListMixersSvc<T: VolumeService>(pub Arc<T>);
+                    impl<
+                        T: VolumeService,
+                    > tonic::server::UnaryService<super::ListMixersRequest>
+                    for ListMixersSvc<T> {
+                        type Response = super::ListMixersResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListMixersRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as VolumeService>::list_mixers(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListMixersSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.VolumeService/GetVolume" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetVolumeSvc<T: VolumeService>(pub Arc<T>);
+                    impl<
+                        T: VolumeService,
+                    > tonic::server::UnaryService<super::GetVolumeRequest>
+                    for GetVolumeSvc<T> {
+                        type Response = super::GetVolumeResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetVolumeRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as VolumeService>::get_volume(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetVolumeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.VolumeService/SetVolume" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetVolumeSvc<T: VolumeService>(pub Arc<T>);
+                    impl<
+                        T: VolumeService,
+                    > tonic::server::UnaryService<super::SetVolumeRequest>
+                    for SetVolumeSvc<T> {
+                        type Response = super::SetVolumeResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetVolumeRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as VolumeService>::set_volume(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetVolumeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.VolumeService/SetMute" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetMuteSvc<T: VolumeService>(pub Arc<T>);
+                    impl<
+                        T: VolumeService,
+                    > tonic::server::UnaryService<super::SetMuteRequest>
+                    for SetMuteSvc<T> {
+                        type Response = super::SetMuteResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetMuteRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as VolumeService>::set_mute(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetMuteSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                _ => {
+                    Box::pin(async move {
+                        let mut response = http::Response::new(empty_body());
+                        let headers = response.headers_mut();
+                        headers
+                            .insert(
+                                tonic::Status::GRPC_STATUS,
+                                (tonic::Code::Unimplemented as i32).into(),
+                            );
+                        headers
+                            .insert(
+                                http::header::CONTENT_TYPE,
+                                tonic::metadata::GRPC_CONTENT_TYPE,
+                            );
+                        Ok(response)
+                    })
+                }
+            }
+        }
+    }
+    impl<T> Clone for VolumeServiceServer<T> {
+        fn clone(&self) -> Self {
+            let inner = self.inner.clone();
+            Self {
+                inner,
+                accept_compression_encodings: self.accept_compression_encodings,
+                send_compression_encodings: self.send_compression_encodings,
+                max_decoding_message_size: self.max_decoding_message_size,
+                max_encoding_message_size: self.max_encoding_message_size,
+            }
+        }
+    }
+    /// Generated gRPC service name
+    pub const SERVICE_NAME: &str = "zerod.v1alpha1.VolumeService";
+    impl<T> tonic::server::NamedService for VolumeServiceServer<T> {
         const NAME: &'static str = SERVICE_NAME;
     }
 }
