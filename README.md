@@ -44,7 +44,30 @@ Early. Pre-1.0, breaking changes expected.
 - **Reflection** — `tonic-reflection` is wired up, so `grpcurl
   -plaintext localhost:50151 list` works out of the box.
 
-## Build
+## Install
+
+### From a release tarball
+
+Every tagged release (`v*` tag on `main`) publishes prebuilt binaries
+for these triples:
+
+| Platform                                  | Tarball                                    |
+| ----------------------------------------- | ------------------------------------------ |
+| macOS Apple Silicon                       | `zerod-aarch64-apple-darwin.tar.gz`        |
+| macOS Intel                               | `zerod-x86_64-apple-darwin.tar.gz`         |
+| Linux x86_64 (NUC, server, …)             | `zerod-x86_64-unknown-linux-gnu.tar.gz`    |
+| Linux ARM64 (Pi 3/4/5, 64-bit SBCs)       | `zerod-aarch64-unknown-linux-gnu.tar.gz`   |
+| Linux ARM v6/v7 (Pi 1 / Zero / Pi OS 32)  | `zerod-arm-unknown-linux-gnueabihf.tar.gz` |
+
+```
+curl -L https://github.com/tsirysndr/zerod/releases/latest/download/zerod-aarch64-unknown-linux-gnu.tar.gz | tar xz
+sudo install zerod-aarch64-unknown-linux-gnu/zerod /usr/local/bin/
+```
+
+Each archive ships `zerod` plus `README.md`, `LICENSE`, and
+`zerod.toml.example`, and is accompanied by a `.sha256` checksum file.
+
+### From source
 
 Native build (whatever host you're on):
 
