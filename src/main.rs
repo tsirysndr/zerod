@@ -15,6 +15,8 @@ use tonic::transport::Channel;
 use tonic::Request;
 use zerod_proto::v1alpha1 as pb;
 
+mod service;
+
 #[derive(Parser)]
 #[command(name = "zerod", version, about = "headless audio/bluetooth/systemd control daemon")]
 struct Cli {
@@ -60,6 +62,23 @@ enum Command {
     /// System volume control via ALSA mixer (client).
     #[command(subcommand)]
     Volume(VolumeCmd),
+    /// Manage zerod's own systemd --user unit (Linux only).
+    #[command(subcommand)]
+    Service(ServiceCmd),
+}
+
+#[derive(Subcommand)]
+enum ServiceCmd {
+    /// Write ~/.config/systemd/user/zerod.service pointing at this binary.
+    Install {
+        /// Overwrite an existing unit file.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Remove ~/.config/systemd/user/zerod.service.
+    Uninstall,
+    /// Print where the unit file would be installed.
+    Path,
 }
 
 #[derive(Subcommand)]
@@ -206,6 +225,50 @@ async fn main() -> Result<()> {
         Some(Command::Config(cmd)) => run_config(&cli.host, cli.port, cli.bearer_token, cmd).await,
         Some(Command::System(cmd)) => run_system(&cli.host, cli.port, cli.bearer_token, cmd).await,
         Some(Command::Volume(cmd)) => run_volume(&cli.host, cli.port, cli.bearer_token, cmd).await,
+        Some(Command::Service(cmd)) => run_service(cmd),
+    }
+}
+
+fn run_service(cmd: ServiceCmd) -> Result<()> {
+    match cmd {
+        ServiceCmd::Install { force } => {
+            let path = service::install(force)?;
+            println!("Wrote {}", path.display());
+            println!();
+            println!("Next steps:");
+            println!("  systemctl --user daemon-reload");
+            println!("  systemctl --user enable --now zerod.service");
+            println!();
+            println!("Then check it's healthy:");
+            println!("  systemctl --user status zerod.service");
+            println!("  journalctl --user -u zerod.service -f");
+            println!();
+            println!("So the service survives logout / starts on boot:");
+            println!("  sudo loginctl enable-linger \"$USER\"");
+            println!();
+            println!("Pin the bearer token so the random one isn't used at startup:");
+            println!("  systemctl --user edit zerod.service");
+            println!("  # then add:  [Service]\\n  Environment=ZEROD_BEARER_TOKEN=…");
+            Ok(())
+        }
+        ServiceCmd::Uninstall => match service::uninstall()? {
+            Some(path) => {
+                println!("Removed {}", path.display());
+                println!();
+                println!("Tell systemd to forget it:");
+                println!("  systemctl --user disable --now zerod.service");
+                println!("  systemctl --user daemon-reload");
+                Ok(())
+            }
+            None => {
+                println!("No unit file installed at {}", service::unit_path()?.display());
+                Ok(())
+            }
+        },
+        ServiceCmd::Path => {
+            println!("{}", service::unit_path()?.display());
+            Ok(())
+        }
     }
 }
 
