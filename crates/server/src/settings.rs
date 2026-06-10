@@ -2,7 +2,7 @@
 //!
 //! Example:
 //!   [server]
-//!   bind = "127.0.0.1:50151"
+//!   bind = "0.0.0.0:50151"
 //!   bearer_token = ""
 //!
 //!   [systemd]
@@ -44,7 +44,10 @@ pub struct SystemdSettings {
 }
 
 fn default_bind() -> String {
-    "127.0.0.1:50151".to_string()
+    // Bind on all interfaces by default so the daemon is reachable from the
+    // LAN out of the box — bearer-token auth (random fallback) covers the
+    // "no zerod.toml" case. Override to "127.0.0.1:50151" for loopback only.
+    "0.0.0.0:50151".to_string()
 }
 
 impl Default for ServerSettings {
@@ -87,7 +90,7 @@ pub fn load_settings(path: Option<&Path>) -> Result<Settings> {
         None => default_search_paths().into_iter().find(|p| p.exists()),
     };
     let Some(p) = resolved else {
-        tracing::warn!("zerod.toml not found; using defaults (loopback, no allowlist, no configs)");
+        tracing::warn!("zerod.toml not found; using defaults (bind 0.0.0.0:50151, no allowlist, no configs)");
         return Ok(Settings::default());
     };
     let body = std::fs::read_to_string(&p)

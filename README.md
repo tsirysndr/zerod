@@ -87,20 +87,21 @@ See `zerod.toml.example` for the full schema. Minimal example:
 
 ```toml
 [server]
-bind = "127.0.0.1:50151"
-bearer_token = ""             # empty → ZEROD_BEARER_TOKEN env → random
+bind         = "0.0.0.0:50151"   # all interfaces; use "127.0.0.1:50151" for loopback only
+bearer_token = ""                # empty → ZEROD_BEARER_TOKEN env → random
 
 [systemd]
 units = ["snapserver.service", "shairport-sync.service"]
 
 [[configs]]
-key = "snapserver"
+key  = "snapserver"
 path = "/etc/snapserver.conf"
 unit = "snapserver.service"
 ```
 
-If no `zerod.toml` is found, `zerod` runs with defaults (loopback, no
-systemd allowlist, no managed configs) and emits a warning.
+If no `zerod.toml` is found, `zerod` runs with defaults (bind
+`0.0.0.0:50151`, no systemd allowlist, no managed configs) and emits a
+warning.
 
 ## Usage
 
@@ -172,10 +173,15 @@ grpcurl -plaintext -H 'authorization: Bearer …' \
 
 ## Security
 
-There is intentionally no TLS in v1. The default bind is `127.0.0.1`. If you
-need to drive `zerod` across a network, put it behind WireGuard / Tailscale /
-SSH; do not expose `:50151` directly. The bearer token is the only line of
-defence against requests that reach the listening socket.
+There is intentionally no TLS in v1. The default bind is `0.0.0.0:50151`
+(all interfaces) so the daemon is reachable from your LAN out of the box —
+which means the bearer token is the only line of defence against any host on
+that network. Always set `bearer_token` in `zerod.toml` (or
+`ZEROD_BEARER_TOKEN`) instead of relying on the random one logged at
+startup, especially when running unattended. For cross-internet access put
+`zerod` behind WireGuard / Tailscale / an SSH tunnel rather than punching
+the port through your router. If you only ever drive `zerod` locally, flip
+the bind back to `127.0.0.1:50151`.
 
 Systemd actions and config writes are gated by the allowlist in `zerod.toml`
 — `zerod` cannot be turned into a generic remote `systemctl`.

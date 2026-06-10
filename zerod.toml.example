@@ -1,9 +1,13 @@
 # zerod.toml — copy to ./zerod.toml, $XDG_CONFIG_HOME/zerod/zerod.toml, or /etc/zerod.toml
 
 [server]
-bind = "127.0.0.1:50151"
+# All-interfaces by default so the daemon is reachable from the LAN.
+# Set to "127.0.0.1:50151" if you only want loopback (and plan to drive
+# zerod over SSH / WireGuard / Tailscale).
+bind = "0.0.0.0:50151"
 # Leave empty to fall back to the ZEROD_BEARER_TOKEN env var, otherwise a
-# random token is generated and logged at startup.
+# random token is generated and logged at startup. Strongly recommended to
+# set this explicitly when bind is non-loopback.
 bearer_token = ""
 
 [systemd]
