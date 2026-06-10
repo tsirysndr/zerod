@@ -1,0 +1,24 @@
+FROM ghcr.io/cross-rs/x86_64-unknown-linux-gnu:main
+
+# Native amd64 build inside the cross container — no multiarch foreign arch
+# needed since the base image is already x86_64. Just install the dev libs
+# straight into the host arch.
+RUN apt-get update && \
+    apt-get --assume-yes install --no-install-recommends \
+        curl \
+        unzip \
+        ca-certificates \
+        libasound2-dev \
+        libdbus-1-dev \
+        libsystemd-dev && \
+    rm -rf /var/lib/apt/lists/*
+
+# Modern protoc — the distro package on this base image is too old to
+# recognise proto3 `optional`. See Dockerfile.arm-unknown-linux-gnueabihf
+# for the full context.
+ARG PROTOC_VERSION=25.1
+RUN curl -fsSL "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip" -o /tmp/protoc.zip && \
+    unzip -q /tmp/protoc.zip -d /usr/local && \
+    rm /tmp/protoc.zip && \
+    chmod +x /usr/local/bin/protoc && \
+    protoc --version

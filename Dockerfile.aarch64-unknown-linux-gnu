@@ -1,0 +1,34 @@
+FROM ghcr.io/cross-rs/aarch64-unknown-linux-gnu:main
+
+# arm64 system libs the cross-compiled binary links against.
+RUN dpkg --add-architecture arm64 && \
+    rm -f /etc/apt/preferences.d/all-packages && \
+    apt-get update && \
+    apt-get --assume-yes install --no-install-recommends \
+        curl \
+        unzip \
+        ca-certificates \
+        libasound2-dev:arm64 \
+        libdbus-1-dev:arm64 \
+        libsystemd-dev:arm64 \
+        libsystemd0:arm64 && \
+    rm -rf /var/lib/apt/lists/*
+
+# Modern protoc — see Dockerfile.arm-unknown-linux-gnueabihf for context.
+# protoc runs on the build host (x86_64), not on the aarch64 target.
+ARG PROTOC_VERSION=25.1
+RUN curl -fsSL "https://github.com/protocolbuffers/protobuf/releases/download/v${PROTOC_VERSION}/protoc-${PROTOC_VERSION}-linux-x86_64.zip" -o /tmp/protoc.zip && \
+    unzip -q /tmp/protoc.zip -d /usr/local && \
+    rm /tmp/protoc.zip && \
+    chmod +x /usr/local/bin/protoc && \
+    protoc --version
+
+ENV PKG_CONFIG_PATH=/usr/lib/aarch64-linux-gnu/pkgconfig \
+    PKG_CONFIG_LIBDIR=/usr/lib/aarch64-linux-gnu/pkgconfig \
+    PKG_CONFIG_SYSROOT_DIR=/ \
+    PKG_CONFIG_ALLOW_CROSS=1
+
+# `bluer` → libdbus-1 → libsystemd.so.0 (indirect). ld's `-L` search path
+# only resolves direct `-l<name>` args, so we need `-rpath-link` for the
+# indirect dep via the multiarch lib dir.
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_RUSTFLAGS="-C link-arg=-Wl,-rpath-link=/usr/lib/aarch64-linux-gnu"
