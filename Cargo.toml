@@ -42,6 +42,7 @@ zerod-proto = { path = "crates/proto" }
 zerod-server = { path = "crates/server" }
 anyhow = { workspace = true }
 clap = { version = "4", features = ["derive", "env"] }
+getrandom = "0.2"
 tokio = { workspace = true }
 tonic = { workspace = true }
 tracing = { workspace = true }

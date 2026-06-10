@@ -70,10 +70,17 @@ enum Command {
 #[derive(Subcommand)]
 enum ServiceCmd {
     /// Write ~/.config/systemd/user/zerod.service pointing at this binary.
+    /// A bearer token is pinned into the unit so it doesn't change on every
+    /// restart — pass --token to choose one, otherwise a random 32-byte hex
+    /// token is generated. Re-running with --force rotates the token unless
+    /// --token is supplied.
     Install {
-        /// Overwrite an existing unit file.
+        /// Overwrite an existing unit file (rotates the bearer token unless --token is given).
         #[arg(long)]
         force: bool,
+        /// Pin this exact bearer token into the unit instead of generating a random one.
+        #[arg(long)]
+        token: Option<String>,
     },
     /// Remove ~/.config/systemd/user/zerod.service.
     Uninstall,
@@ -231,9 +238,12 @@ async fn main() -> Result<()> {
 
 fn run_service(cmd: ServiceCmd) -> Result<()> {
     match cmd {
-        ServiceCmd::Install { force } => {
-            let path = service::install(force)?;
-            println!("Wrote {}", path.display());
+        ServiceCmd::Install { force, token } => {
+            let installed = service::install(force, token)?;
+            println!("Wrote {}", installed.path.display());
+            println!();
+            println!("Bearer token (pinned in the unit, mode 0600):");
+            println!("  {}", installed.token);
             println!();
             println!("Next steps:");
             println!("  systemctl --user daemon-reload");
@@ -246,9 +256,9 @@ fn run_service(cmd: ServiceCmd) -> Result<()> {
             println!("So the service survives logout / starts on boot:");
             println!("  sudo loginctl enable-linger \"$USER\"");
             println!();
-            println!("Pin the bearer token so the random one isn't used at startup:");
-            println!("  systemctl --user edit zerod.service");
-            println!("  # then add:  [Service]\\n  Environment=ZEROD_BEARER_TOKEN=…");
+            println!("Use the token from any client:");
+            println!("  export ZEROD_BEARER_TOKEN={}", installed.token);
+            println!("  zerod --host <pi> system health");
             Ok(())
         }
         ServiceCmd::Uninstall => match service::uninstall()? {
