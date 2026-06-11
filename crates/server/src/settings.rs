@@ -31,6 +31,56 @@ pub struct Settings {
     pub configs: Vec<ManagedConfig>,
     #[serde(default)]
     pub snapcast: SnapcastSettings,
+    #[serde(default)]
+    pub librespot: LibrespotSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct LibrespotSettings {
+    /// Allow `StreamService.SpotifyStart` to spawn librespot. When false,
+    /// the RPC returns `FAILED_PRECONDITION`.
+    #[serde(default)]
+    pub enabled: bool,
+    /// `librespot` binary path or name. Resolved against $PATH when not
+    /// absolute.
+    #[serde(default = "default_librespot_binary")]
+    pub binary: String,
+    /// Spotify Connect device name as it appears in the phone's Devices
+    /// list. Empty → "zerod".
+    #[serde(default = "default_librespot_name")]
+    pub name: String,
+    /// 96 / 160 / 320 kbps. Defaults to 320.
+    #[serde(default = "default_librespot_bitrate")]
+    pub bitrate: u32,
+    /// Directory where librespot stores credentials. Empty → librespot's
+    /// own default. `--disable-audio-cache` is always set so this is
+    /// credentials only.
+    #[serde(default)]
+    pub cache_path: String,
+}
+
+impl Default for LibrespotSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            binary: default_librespot_binary(),
+            name: default_librespot_name(),
+            bitrate: default_librespot_bitrate(),
+            cache_path: String::new(),
+        }
+    }
+}
+
+fn default_librespot_binary() -> String {
+    "librespot".to_string()
+}
+
+fn default_librespot_name() -> String {
+    "zerod".to_string()
+}
+
+fn default_librespot_bitrate() -> u32 {
+    320
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -127,6 +177,7 @@ impl Default for Settings {
             mdns: MdnsSettings::default(),
             configs: Vec::new(),
             snapcast: SnapcastSettings::default(),
+            librespot: LibrespotSettings::default(),
         }
     }
 }

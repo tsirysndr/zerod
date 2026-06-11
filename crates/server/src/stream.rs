@@ -2,24 +2,37 @@ use tonic::{Request, Response, Status};
 use zerod_proto::v1alpha1::{
     stream_service_server::StreamService, AudioOutput as ProtoOutput, GetStreamVolumeRequest,
     GetStreamVolumeResponse, PauseRequest, PauseResponse, PlayRequest, PlayResponse,
-    PlayerState as ProtoState, ResumeRequest, ResumeResponse, SetStreamVolumeRequest,
-    SetStreamVolumeResponse, StatusRequest, StatusResponse, StopRequest, StopResponse,
+    PlaybackSource as ProtoSource, PlayerState as ProtoState, ResumeRequest, ResumeResponse,
+    SetStreamVolumeRequest, SetStreamVolumeResponse, SpotifyStartRequest, SpotifyStartResponse,
+    SpotifyStopRequest, SpotifyStopResponse, StatusRequest, StatusResponse, StopRequest,
+    StopResponse,
 };
-use zerod_stream::{AudioOutput, PlayConfig, PlayerState};
+use zerod_stream::{AudioOutput, LibrespotConfig, PlayConfig, PlaybackSource, PlayerState};
 
-#[derive(Default)]
-pub struct StreamSvc;
+use crate::settings::LibrespotSettings;
 
-fn map_output(req: &PlayRequest) -> Result<AudioOutput, Status> {
-    match ProtoOutput::try_from(req.output) {
+pub struct StreamSvc {
+    librespot: LibrespotSettings,
+}
+
+impl StreamSvc {
+    pub fn new(librespot: LibrespotSettings) -> Self {
+        Self { librespot }
+    }
+}
+
+fn map_output(
+    output: i32,
+    pipe_path: Option<String>,
+    cpal_device: Option<String>,
+) -> Result<AudioOutput, Status> {
+    match ProtoOutput::try_from(output) {
         Ok(ProtoOutput::Cpal) | Ok(ProtoOutput::Unspecified) => Ok(AudioOutput::Cpal {
-            device: req.cpal_device.clone().filter(|s| !s.is_empty()),
+            device: cpal_device.filter(|s| !s.is_empty()),
         }),
         Ok(ProtoOutput::Stdout) => Ok(AudioOutput::Stdout),
         Ok(ProtoOutput::Pipe) => {
-            let path = req
-                .pipe_path
-                .clone()
+            let path = pipe_path
                 .filter(|s| !s.is_empty())
                 .ok_or_else(|| Status::invalid_argument("pipe_path required for AUDIO_OUTPUT_PIPE"))?;
             Ok(AudioOutput::Pipe { path })
@@ -46,11 +59,20 @@ fn map_state(s: PlayerState) -> ProtoState {
     }
 }
 
+fn map_source(s: PlaybackSource) -> ProtoSource {
+    match s {
+        PlaybackSource::Unspecified => ProtoSource::Unspecified,
+        PlaybackSource::Hls => ProtoSource::Hls,
+        PlaybackSource::Dash => ProtoSource::Dash,
+        PlaybackSource::Spotify => ProtoSource::Spotify,
+    }
+}
+
 #[tonic::async_trait]
 impl StreamService for StreamSvc {
     async fn play(&self, req: Request<PlayRequest>) -> Result<Response<PlayResponse>, Status> {
         let req = req.into_inner();
-        let output = map_output(&req)?;
+        let output = map_output(req.output, req.pipe_path, req.cpal_device)?;
         tracing::info!("stream.Play url={} output={:?}", req.url, output);
         zerod_stream::play(PlayConfig {
             url: req.url,
@@ -95,6 +117,7 @@ impl StreamService for StreamSvc {
             error: s.error,
             output: map_output_back(&s.output) as i32,
             volume_percent: s.volume_percent,
+            source: map_source(s.source) as i32,
         }))
     }
 
@@ -114,5 +137,37 @@ impl StreamService for StreamSvc {
         Ok(Response::new(GetStreamVolumeResponse {
             volume_percent: zerod_stream::volume(),
         }))
+    }
+
+    async fn spotify_start(
+        &self,
+        req: Request<SpotifyStartRequest>,
+    ) -> Result<Response<SpotifyStartResponse>, Status> {
+        if !self.librespot.enabled {
+            return Err(Status::failed_precondition(
+                "librespot disabled in zerod.toml ([librespot].enabled = false)",
+            ));
+        }
+        let req = req.into_inner();
+        let output = map_output(req.output, req.pipe_path, req.cpal_device)?;
+        let cfg = LibrespotConfig {
+            binary: self.librespot.binary.clone(),
+            name: self.librespot.name.clone(),
+            bitrate: self.librespot.bitrate,
+            cache_path: self.librespot.cache_path.clone(),
+            output,
+        };
+        tracing::info!("stream.SpotifyStart name={}", cfg.name);
+        zerod_stream::spotify_start(cfg).map_err(|e| Status::internal(format!("{e:#}")))?;
+        Ok(Response::new(SpotifyStartResponse {}))
+    }
+
+    async fn spotify_stop(
+        &self,
+        _req: Request<SpotifyStopRequest>,
+    ) -> Result<Response<SpotifyStopResponse>, Status> {
+        tracing::info!("stream.SpotifyStop");
+        zerod_stream::spotify_stop();
+        Ok(Response::new(SpotifyStopResponse {}))
     }
 }

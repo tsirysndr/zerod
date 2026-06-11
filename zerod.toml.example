@@ -63,3 +63,19 @@ port = 1705
 # Forward snapserver push notifications onto the in-process event bus so
 # `zerod events tail --filter snap` catches external `snapctl` changes.
 forward_notifications = true
+
+[librespot]
+# When enabled, StreamService.SpotifyStart spawns a librespot subprocess
+# wired into the same audio sink as HLS/DASH. Install librespot via
+# `apt install librespot` (Debian/Ubuntu) or `brew install librespot`.
+enabled = false
+# Resolved against $PATH when not absolute.
+binary = "librespot"
+# Device name as it appears in the Spotify app's Devices list.
+name = "zerod"
+# 96 / 160 / 320 kbps.
+bitrate = 320
+# Where librespot stores credentials. Empty → librespot's default
+# (current directory). --disable-audio-cache is always passed, so this
+# is creds only — pick a persistent path so you don't re-pair every boot.
+cache_path = ""

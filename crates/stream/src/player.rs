@@ -42,6 +42,26 @@ pub enum PlayerState {
     Errored = 4,
 }
 
+#[repr(u8)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaybackSource {
+    Unspecified = 0,
+    Hls = 1,
+    Dash = 2,
+    Spotify = 3,
+}
+
+impl PlaybackSource {
+    fn from_u8(v: u8) -> Self {
+        match v {
+            1 => Self::Hls,
+            2 => Self::Dash,
+            3 => Self::Spotify,
+            _ => Self::Unspecified,
+        }
+    }
+}
+
 pub struct PlayConfig {
     pub url: String,
     pub output: AudioOutput,
@@ -56,12 +76,29 @@ pub struct Status {
     pub error: Option<String>,
     pub output: AudioOutput,
     pub volume_percent: u32,
+    pub source: PlaybackSource,
 }
 
 /// Player volume state shared with the runtime. We store volume as an
 /// integer 0..=100 to dodge the floating-point atomic dance — gain conversion
 /// happens at sample-apply time.
 static GLOBAL_VOLUME: AtomicU32 = AtomicU32::new(100);
+
+/// Shared tokio runtime for any source spawned via [`install`].
+#[cfg(target_os = "linux")]
+pub(crate) fn runtime() -> &'static Runtime {
+    &RT
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn global_volume() -> u32 {
+    GLOBAL_VOLUME.load(Ordering::Relaxed)
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn apply_gain_pub(samples: &mut [i16], vol: u32) {
+    apply_gain(samples, vol);
+}
 
 fn apply_gain(samples: &mut [i16], volume_percent: u32) {
     if volume_percent >= 100 {
@@ -81,22 +118,45 @@ fn apply_gain(samples: &mut [i16], volume_percent: u32) {
     }
 }
 
-struct Player {
-    url: String,
-    output: AudioOutput,
-    sink: Arc<dyn AudioSink>,
+pub(crate) struct Player {
+    pub(crate) url: String,
+    pub(crate) output: AudioOutput,
+    pub(crate) sink: Arc<dyn AudioSink>,
     state: AtomicU8,
     paused: AtomicBool,
-    stop_flag: Arc<AtomicBool>,
+    pub(crate) stop_flag: Arc<AtomicBool>,
     position_ms: AtomicI64,
     duration_ms: AtomicI64,
     is_live: AtomicBool,
     task: Mutex<Option<JoinHandle<()>>>,
     last_error: Mutex<Option<String>>,
+    source: AtomicU8,
 }
 
 impl Player {
-    fn set_state(&self, s: PlayerState) {
+    pub(crate) fn new(
+        url: String,
+        output: AudioOutput,
+        sink: Arc<dyn AudioSink>,
+        source: PlaybackSource,
+    ) -> Self {
+        Self {
+            url,
+            output,
+            sink,
+            state: AtomicU8::new(PlayerState::Stopped as u8),
+            paused: AtomicBool::new(false),
+            stop_flag: Arc::new(AtomicBool::new(false)),
+            position_ms: AtomicI64::new(0),
+            duration_ms: AtomicI64::new(-1),
+            is_live: AtomicBool::new(false),
+            task: Mutex::new(None),
+            last_error: Mutex::new(None),
+            source: AtomicU8::new(source as u8),
+        }
+    }
+
+    pub(crate) fn set_state(&self, s: PlayerState) {
         self.state.store(s as u8, Ordering::SeqCst);
         let error = self.last_error.lock().unwrap().clone();
         zerod_events::publish(zerod_events::Event::StreamStateChanged {
@@ -116,19 +176,36 @@ impl Player {
         }
     }
 
-    fn record_error(&self, msg: String) {
+    pub(crate) fn record_error(&self, msg: String) {
         tracing::error!("stream: {msg}");
         *self.last_error.lock().unwrap() = Some(msg);
         self.set_state(PlayerState::Errored);
     }
 
-    fn cancel(&self) {
+    pub(crate) fn cancel(&self) {
         self.stop_flag.store(true, Ordering::SeqCst);
         self.sink.close();
         if let Some(h) = self.task.lock().unwrap().take() {
             h.abort();
         }
     }
+}
+
+/// Install `player` as the current singleton, attaching its driver task.
+/// Any previously-installed player is cancelled. Used by both the HLS/DASH
+/// path and `sources::librespot`.
+pub(crate) fn install(player: Arc<Player>, task: JoinHandle<()>) {
+    *player.task.lock().unwrap() = Some(task);
+    let mut g = PLAYER.lock().unwrap();
+    if let Some(old) = g.take() {
+        old.cancel();
+    }
+    *g = Some(player);
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn build_sink_pub(out: &AudioOutput) -> Result<Arc<dyn AudioSink>> {
+    build_sink(out)
 }
 
 fn build_sink(out: &AudioOutput) -> Result<Arc<dyn AudioSink>> {
@@ -377,32 +454,17 @@ fn current() -> Option<Arc<Player>> {
 }
 
 pub fn play(cfg: PlayConfig) -> Result<()> {
-    if manifest::is_hls_or_dash_url(&cfg.url).is_none() {
-        return Err(anyhow!("not an HLS or DASH URL: {}", cfg.url));
-    }
+    let kind = manifest::is_hls_or_dash_url(&cfg.url)
+        .ok_or_else(|| anyhow!("not an HLS or DASH URL: {}", cfg.url))?;
+    let source = match kind {
+        ManifestKind::Hls => PlaybackSource::Hls,
+        ManifestKind::Dash => PlaybackSource::Dash,
+    };
     let sink = build_sink(&cfg.output)?;
-    let player = Arc::new(Player {
-        url: cfg.url,
-        output: cfg.output,
-        sink,
-        state: AtomicU8::new(PlayerState::Stopped as u8),
-        paused: AtomicBool::new(false),
-        stop_flag: Arc::new(AtomicBool::new(false)),
-        position_ms: AtomicI64::new(0),
-        duration_ms: AtomicI64::new(-1),
-        is_live: AtomicBool::new(false),
-        task: Mutex::new(None),
-        last_error: Mutex::new(None),
-    });
+    let player = Arc::new(Player::new(cfg.url, cfg.output, sink, source));
     let runner = player.clone();
     let task = RT.spawn(async move { run_player(runner).await });
-    *player.task.lock().unwrap() = Some(task);
-
-    let mut g = PLAYER.lock().unwrap();
-    if let Some(old) = g.take() {
-        old.cancel();
-    }
-    *g = Some(player);
+    install(player, task);
     Ok(())
 }
 
@@ -449,6 +511,7 @@ pub fn status() -> Status {
             error: p.last_error.lock().unwrap().clone(),
             output: p.output.clone(),
             volume_percent,
+            source: PlaybackSource::from_u8(p.source.load(Ordering::SeqCst)),
         }
     } else {
         Status {
@@ -460,6 +523,7 @@ pub fn status() -> Status {
             error: None,
             output: AudioOutput::Cpal { device: None },
             volume_percent,
+            source: PlaybackSource::Unspecified,
         }
     }
 }

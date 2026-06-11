@@ -774,7 +774,25 @@ pub struct StatusResponse {
     /// per-stream gain, 0..=100
     #[prost(uint32, tag = "8")]
     pub volume_percent: u32,
+    #[prost(enumeration = "PlaybackSource", tag = "9")]
+    pub source: i32,
 }
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SpotifyStartRequest {
+    #[prost(enumeration = "AudioOutput", tag = "1")]
+    pub output: i32,
+    /// Required when output == AUDIO_OUTPUT_PIPE.
+    #[prost(string, optional, tag = "2")]
+    pub pipe_path: ::core::option::Option<::prost::alloc::string::String>,
+    #[prost(string, optional, tag = "3")]
+    pub cpal_device: ::core::option::Option<::prost::alloc::string::String>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SpotifyStartResponse {}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SpotifyStopRequest {}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SpotifyStopResponse {}
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct SetStreamVolumeRequest {
     /// 0..=100
@@ -859,6 +877,38 @@ impl PlayerState {
             "PLAYER_STATE_PLAYING" => Some(Self::Playing),
             "PLAYER_STATE_PAUSED" => Some(Self::Paused),
             "PLAYER_STATE_ERRORED" => Some(Self::Errored),
+            _ => None,
+        }
+    }
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, ::prost::Enumeration)]
+#[repr(i32)]
+pub enum PlaybackSource {
+    Unspecified = 0,
+    Hls = 1,
+    Dash = 2,
+    Spotify = 3,
+}
+impl PlaybackSource {
+    /// String value of the enum field names used in the ProtoBuf definition.
+    ///
+    /// The values are not transformed in any way and thus are considered stable
+    /// (if the ProtoBuf definition does not change) and safe for programmatic use.
+    pub fn as_str_name(&self) -> &'static str {
+        match self {
+            Self::Unspecified => "PLAYBACK_SOURCE_UNSPECIFIED",
+            Self::Hls => "PLAYBACK_SOURCE_HLS",
+            Self::Dash => "PLAYBACK_SOURCE_DASH",
+            Self::Spotify => "PLAYBACK_SOURCE_SPOTIFY",
+        }
+    }
+    /// Creates an enum from field names used in the ProtoBuf definition.
+    pub fn from_str_name(value: &str) -> ::core::option::Option<Self> {
+        match value {
+            "PLAYBACK_SOURCE_UNSPECIFIED" => Some(Self::Unspecified),
+            "PLAYBACK_SOURCE_HLS" => Some(Self::Hls),
+            "PLAYBACK_SOURCE_DASH" => Some(Self::Dash),
+            "PLAYBACK_SOURCE_SPOTIFY" => Some(Self::Spotify),
             _ => None,
         }
     }
@@ -1113,6 +1163,58 @@ pub mod stream_service_client {
                 );
             self.inner.unary(req, path, codec).await
         }
+        /// Start a Spotify Connect session via librespot. The daemon advertises
+        /// itself on the LAN; the phone picks it from the Devices list. Returns
+        /// FAILED_PRECONDITION when `[librespot].enabled = false` or the binary
+        /// is missing.
+        pub async fn spotify_start(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SpotifyStartRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SpotifyStartResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.StreamService/SpotifyStart",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("zerod.v1alpha1.StreamService", "SpotifyStart"));
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn spotify_stop(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SpotifyStopRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SpotifyStopResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.StreamService/SpotifyStop",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(GrpcMethod::new("zerod.v1alpha1.StreamService", "SpotifyStop"));
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -1162,6 +1264,24 @@ pub mod stream_service_server {
             request: tonic::Request<super::GetStreamVolumeRequest>,
         ) -> std::result::Result<
             tonic::Response<super::GetStreamVolumeResponse>,
+            tonic::Status,
+        >;
+        /// Start a Spotify Connect session via librespot. The daemon advertises
+        /// itself on the LAN; the phone picks it from the Devices list. Returns
+        /// FAILED_PRECONDITION when `[librespot].enabled = false` or the binary
+        /// is missing.
+        async fn spotify_start(
+            &self,
+            request: tonic::Request<super::SpotifyStartRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SpotifyStartResponse>,
+            tonic::Status,
+        >;
+        async fn spotify_stop(
+            &self,
+            request: tonic::Request<super::SpotifyStopRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SpotifyStopResponse>,
             tonic::Status,
         >;
     }
@@ -1540,6 +1660,96 @@ pub mod stream_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = GetStreamVolumeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.StreamService/SpotifyStart" => {
+                    #[allow(non_camel_case_types)]
+                    struct SpotifyStartSvc<T: StreamService>(pub Arc<T>);
+                    impl<
+                        T: StreamService,
+                    > tonic::server::UnaryService<super::SpotifyStartRequest>
+                    for SpotifyStartSvc<T> {
+                        type Response = super::SpotifyStartResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SpotifyStartRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as StreamService>::spotify_start(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SpotifyStartSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.StreamService/SpotifyStop" => {
+                    #[allow(non_camel_case_types)]
+                    struct SpotifyStopSvc<T: StreamService>(pub Arc<T>);
+                    impl<
+                        T: StreamService,
+                    > tonic::server::UnaryService<super::SpotifyStopRequest>
+                    for SpotifyStopSvc<T> {
+                        type Response = super::SpotifyStopResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SpotifyStopRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as StreamService>::spotify_stop(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SpotifyStopSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

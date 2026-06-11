@@ -204,6 +204,23 @@ enum StreamCmd {
     /// Per-stream software gain (0..=100), independent of the system mixer.
     #[command(subcommand)]
     Volume(StreamVolumeCmd),
+    /// Spotify Connect via librespot — daemon advertises itself; the
+    /// phone pushes audio to it.
+    #[command(subcommand)]
+    Spotify(SpotifyCmd),
+}
+
+#[derive(Subcommand)]
+enum SpotifyCmd {
+    /// Begin advertising as a Spotify Connect device.
+    Start {
+        #[arg(long, value_enum, default_value_t = OutputArg::Cpal)]
+        output: OutputArg,
+        #[arg(long)]
+        pipe_path: Option<String>,
+    },
+    /// Tear down the librespot subprocess.
+    Stop,
 }
 
 #[derive(Subcommand)]
@@ -580,8 +597,9 @@ async fn run_stream(ep: &Endpoint, token: Option<String>, cmd: StreamCmd) -> Res
                 .into_inner();
             let state = pb::PlayerState::try_from(r.state).unwrap_or(pb::PlayerState::Unspecified);
             let out = pb::AudioOutput::try_from(r.output).unwrap_or(pb::AudioOutput::Unspecified);
+            let src = pb::PlaybackSource::try_from(r.source).unwrap_or(pb::PlaybackSource::Unspecified);
             println!(
-                "state={state:?} url={} position_ms={} duration_ms={} is_live={} output={out:?} volume={}% error={:?}",
+                "state={state:?} source={src:?} url={} position_ms={} duration_ms={} is_live={} output={out:?} volume={}% error={:?}",
                 r.url, r.position_ms, r.duration_ms, r.is_live, r.volume_percent, r.error,
             );
         }
@@ -599,6 +617,32 @@ async fn run_stream(ep: &Endpoint, token: Option<String>, cmd: StreamCmd) -> Res
                         Request::new(pb::SetStreamVolumeRequest { volume_percent: percent }),
                         &token,
                     ))
+                    .await?;
+                println!("ok");
+            }
+        },
+        StreamCmd::Spotify(cmd) => match cmd {
+            SpotifyCmd::Start { output, pipe_path } => {
+                let output = match output {
+                    OutputArg::Cpal => pb::AudioOutput::Cpal,
+                    OutputArg::Stdout => pb::AudioOutput::Stdout,
+                    OutputArg::Pipe => pb::AudioOutput::Pipe,
+                } as i32;
+                client
+                    .spotify_start(attach_token(
+                        Request::new(pb::SpotifyStartRequest {
+                            output,
+                            pipe_path,
+                            cpal_device: None,
+                        }),
+                        &token,
+                    ))
+                    .await?;
+                println!("ok");
+            }
+            SpotifyCmd::Stop => {
+                client
+                    .spotify_stop(attach_token(Request::new(pb::SpotifyStopRequest {}), &token))
                     .await?;
                 println!("ok");
             }

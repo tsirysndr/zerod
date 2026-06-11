@@ -17,6 +17,13 @@ enum PlayerState {
   PLAYER_STATE_ERRORED = 5;
 }
 
+enum PlaybackSource {
+  PLAYBACK_SOURCE_UNSPECIFIED = 0;
+  PLAYBACK_SOURCE_HLS = 1;
+  PLAYBACK_SOURCE_DASH = 2;
+  PLAYBACK_SOURCE_SPOTIFY = 3;
+}
+
 message PlayRequest {
   // HLS (.m3u8) or DASH (.mpd) URL.
   string url = 1;
@@ -47,7 +54,19 @@ message StatusResponse {
   optional string error = 6;
   AudioOutput output = 7;
   uint32 volume_percent = 8;  // per-stream gain, 0..=100
+  PlaybackSource source = 9;
 }
+
+message SpotifyStartRequest {
+  AudioOutput output = 1;
+  // Required when output == AUDIO_OUTPUT_PIPE.
+  optional string pipe_path = 2;
+  optional string cpal_device = 3;
+}
+message SpotifyStartResponse {}
+
+message SpotifyStopRequest {}
+message SpotifyStopResponse {}
 
 message SetStreamVolumeRequest {
   uint32 volume_percent = 1;  // 0..=100
@@ -69,4 +88,10 @@ service StreamService {
   // Independent of the system ALSA mixer (see VolumeService).
   rpc SetStreamVolume(SetStreamVolumeRequest) returns (SetStreamVolumeResponse);
   rpc GetStreamVolume(GetStreamVolumeRequest) returns (GetStreamVolumeResponse);
+  // Start a Spotify Connect session via librespot. The daemon advertises
+  // itself on the LAN; the phone picks it from the Devices list. Returns
+  // FAILED_PRECONDITION when `[librespot].enabled = false` or the binary
+  // is missing.
+  rpc SpotifyStart(SpotifyStartRequest) returns (SpotifyStartResponse);
+  rpc SpotifyStop(SpotifyStopRequest) returns (SpotifyStopResponse);
 }

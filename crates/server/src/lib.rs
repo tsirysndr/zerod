@@ -68,7 +68,7 @@ pub async fn serve(settings: Settings) -> Result<()> {
             interceptor.clone(),
         ))
         .add_service(StreamServiceServer::with_interceptor(
-            stream::StreamSvc::default(),
+            stream::StreamSvc::new(settings.librespot.clone()),
             interceptor.clone(),
         ))
         .add_service(SystemdServiceServer::with_interceptor(

@@ -20,9 +20,12 @@ mod manifest;
 mod output;
 mod player;
 mod sink;
+mod sources;
 
 pub use manifest::{is_hls_or_dash_url, ManifestKind};
 pub use player::{
-    pause, play, resume, set_volume, status, stop, volume, PlayConfig, PlayerState, Status,
+    pause, play, resume, set_volume, status, stop, volume, PlayConfig, PlaybackSource,
+    PlayerState, Status,
 };
 pub use sink::{AudioOutput, AudioSink};
+pub use sources::{spotify_start, spotify_stop, LibrespotConfig};
