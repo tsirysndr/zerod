@@ -47,18 +47,32 @@ Early. Pre-1.0, breaking changes expected.
 
 ## Install
 
+### With Homebrew
+
+```
+brew install tsirysndr/tap/zerod
+```
+
+Works on macOS (Apple Silicon and Intel) and Linuxbrew.
+
 ### From a release tarball
 
 Every tagged release (`v*` tag on `main`) publishes prebuilt binaries
 for these triples:
 
-| Platform                                  | Tarball                                    |
-| ----------------------------------------- | ------------------------------------------ |
-| macOS Apple Silicon                       | `zerod-aarch64-apple-darwin.tar.gz`        |
-| macOS Intel                               | `zerod-x86_64-apple-darwin.tar.gz`         |
-| Linux x86_64 (NUC, server, …)             | `zerod-x86_64-unknown-linux-gnu.tar.gz`    |
-| Linux ARM64 (Pi 3/4/5, 64-bit SBCs)       | `zerod-aarch64-unknown-linux-gnu.tar.gz`   |
-| Linux ARM v6/v7 (Pi 1 / Zero / Pi OS 32)  | `zerod-arm-unknown-linux-gnueabihf.tar.gz` |
+| Platform                                 | Tarball                                         |
+| ---------------------------------------- | ----------------------------------------------- |
+| macOS Apple Silicon                      | [`zerod-aarch64-apple-darwin.tar.gz`][dl-mac-a] |
+| macOS Intel                              | [`zerod-x86_64-apple-darwin.tar.gz`][dl-mac-x]  |
+| Linux x86_64 (NUC, server, …)            | [`zerod-x86_64-unknown-linux-gnu.tar.gz`][dl-x] |
+| Linux ARM64 (Pi 3/4/5, 64-bit SBCs)      | [`zerod-aarch64-unknown-linux-gnu.tar.gz`][dl-a]|
+| Linux ARM v6/v7 (Pi 1 / Zero / Pi OS 32) | [`zerod-arm-unknown-linux-gnueabihf.tar.gz`][dl-r] |
+
+[dl-mac-a]: https://github.com/tsirysndr/zerod/releases/latest/download/zerod-aarch64-apple-darwin.tar.gz
+[dl-mac-x]: https://github.com/tsirysndr/zerod/releases/latest/download/zerod-x86_64-apple-darwin.tar.gz
+[dl-x]:     https://github.com/tsirysndr/zerod/releases/latest/download/zerod-x86_64-unknown-linux-gnu.tar.gz
+[dl-a]:     https://github.com/tsirysndr/zerod/releases/latest/download/zerod-aarch64-unknown-linux-gnu.tar.gz
+[dl-r]:     https://github.com/tsirysndr/zerod/releases/latest/download/zerod-arm-unknown-linux-gnueabihf.tar.gz
 
 ```
 curl -L https://github.com/tsirysndr/zerod/releases/latest/download/zerod-aarch64-unknown-linux-gnu.tar.gz | tar xz
