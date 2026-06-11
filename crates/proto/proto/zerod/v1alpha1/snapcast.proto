@@ -1,0 +1,104 @@
+syntax = "proto3";
+package zerod.v1alpha1;
+
+// MVP wrapper around snapserver's JSON-RPC 2.0 API. See:
+// https://github.com/badaix/snapcast/blob/master/doc/json_rpc_api/control.md
+
+message SnapVolume {
+  uint32 percent = 1;
+  bool muted = 2;
+}
+
+message SnapClient {
+  string id = 1;
+  string name = 2;          // config.name (best-effort display name)
+  bool connected = 3;
+  uint32 volume_percent = 4;
+  bool muted = 5;
+  int32 latency_ms = 6;
+  string mac = 7;
+  string host = 8;          // host.name
+  string version = 9;       // snapclient.version
+}
+
+message SnapGroup {
+  string id = 1;
+  string name = 2;
+  string stream_id = 3;
+  bool muted = 4;
+  repeated string client_ids = 5;
+}
+
+message SnapStream {
+  string id = 1;
+  string status = 2;        // "playing" / "idle" / etc.
+}
+
+message SnapServer {
+  repeated SnapGroup groups = 1;
+  repeated SnapStream streams = 2;
+}
+
+message GetServerStatusRequest {}
+message GetServerStatusResponse {
+  SnapServer server = 1;
+}
+
+message ListClientsRequest {}
+message ListClientsResponse {
+  repeated SnapClient clients = 1;
+}
+
+message ListSnapStreamsRequest {}
+message ListSnapStreamsResponse {
+  repeated SnapStream streams = 1;
+}
+
+message SetClientVolumeRequest {
+  string client_id = 1;
+  uint32 volume_percent = 2;   // 0..=100
+  bool muted = 3;
+}
+message SetClientVolumeResponse {}
+
+message SetClientLatencyRequest {
+  string client_id = 1;
+  int32 latency_ms = 2;
+}
+message SetClientLatencyResponse {}
+
+message SetClientNameRequest {
+  string client_id = 1;
+  string name = 2;
+}
+message SetClientNameResponse {}
+
+message SetGroupStreamRequest {
+  string group_id = 1;
+  string stream_id = 2;
+}
+message SetGroupStreamResponse {}
+
+message SetGroupMuteRequest {
+  string group_id = 1;
+  bool muted = 2;
+}
+message SetGroupMuteResponse {}
+
+message SetGroupClientsRequest {
+  string group_id = 1;
+  repeated string client_ids = 2;
+}
+message SetGroupClientsResponse {}
+
+service SnapcastService {
+  rpc GetServerStatus(GetServerStatusRequest) returns (GetServerStatusResponse);
+  rpc ListClients(ListClientsRequest) returns (ListClientsResponse);
+  rpc ListSnapStreams(ListSnapStreamsRequest) returns (ListSnapStreamsResponse);
+  rpc SetClientVolume(SetClientVolumeRequest) returns (SetClientVolumeResponse);
+  rpc SetClientLatency(SetClientLatencyRequest) returns (SetClientLatencyResponse);
+  rpc SetClientName(SetClientNameRequest) returns (SetClientNameResponse);
+  rpc SetGroupStream(SetGroupStreamRequest) returns (SetGroupStreamResponse);
+  rpc SetGroupMute(SetGroupMuteRequest) returns (SetGroupMuteResponse);
+  rpc SetGroupClients(SetGroupClientsRequest) returns (SetGroupClientsResponse);
+}

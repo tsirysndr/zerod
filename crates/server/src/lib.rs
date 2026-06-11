@@ -4,6 +4,7 @@ mod bluetooth;
 mod config;
 mod events;
 mod settings;
+mod snapcast;
 mod stream;
 mod system;
 mod systemd;
@@ -18,6 +19,7 @@ use tonic::transport::Server;
 use zerod_proto::v1alpha1::{
     bluetooth_service_server::BluetoothServiceServer,
     config_service_server::ConfigServiceServer, events_service_server::EventsServiceServer,
+    snapcast_service_server::SnapcastServiceServer,
     stream_service_server::StreamServiceServer, system_service_server::SystemServiceServer,
     systemd_service_server::SystemdServiceServer, volume_service_server::VolumeServiceServer,
 };
@@ -32,6 +34,7 @@ pub async fn serve(settings: Settings) -> Result<()> {
     let allow = Arc::new(settings.systemd_allowlist());
     let registry = Arc::new(settings.config_registry());
     let bearer = resolve_bearer_token(&settings.server.bearer_token)?;
+    let snap_svc = build_snapcast_svc(&settings.snapcast);
 
     let _mdns = maybe_advertise(&settings.mdns, addr.port());
 
@@ -82,6 +85,10 @@ pub async fn serve(settings: Settings) -> Result<()> {
         ))
         .add_service(EventsServiceServer::with_interceptor(
             events::EventsSvc::default(),
+            interceptor.clone(),
+        ))
+        .add_service(SnapcastServiceServer::with_interceptor(
+            snap_svc,
             interceptor,
         ))
         .serve(addr)
@@ -132,6 +139,28 @@ fn resolve_bearer_token(from_settings: &str) -> Result<String> {
     );
     tracing::warn!("auth: BEARER TOKEN = {}", token);
     Ok(token)
+}
+
+/// Spawn the snapcast supervisor task if `[snapcast].enabled = true`, and
+/// hand it to the gRPC service. When disabled, the service still
+/// registers but every RPC returns `FAILED_PRECONDITION`.
+fn build_snapcast_svc(cfg: &settings::SnapcastSettings) -> snapcast::SnapcastSvc {
+    if !cfg.enabled {
+        tracing::info!("snapcast: disabled in zerod.toml");
+        return snapcast::SnapcastSvc::disabled();
+    }
+    tracing::info!(
+        "snapcast: connecting to {}:{} (notifications={})",
+        cfg.host,
+        cfg.port,
+        cfg.forward_notifications,
+    );
+    let client = zerod_snapcast::SnapcastClient::spawn(
+        cfg.host.clone(),
+        cfg.port,
+        cfg.forward_notifications,
+    );
+    snapcast::SnapcastSvc::enabled(Arc::new(client))
 }
 
 /// Returns the live [`Advertisement`] so the caller keeps it alive for the

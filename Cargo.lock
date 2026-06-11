@@ -4334,9 +4334,22 @@ dependencies = [
  "zerod-discovery",
  "zerod-events",
  "zerod-proto",
+ "zerod-snapcast",
  "zerod-stream",
  "zerod-systemd",
  "zerod-volume",
+]
+
+[[package]]
+name = "zerod-snapcast"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "zerod-events",
 ]
 
 [[package]]

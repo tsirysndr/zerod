@@ -51,3 +51,15 @@ unit = "shairport-sync.service"
 key = "squeezelite"
 path = "/etc/default/squeezelite"
 unit = "squeezelite.service"
+
+[snapcast]
+# When enabled, zerod connects to a local snapserver's JSON-RPC port on
+# startup and exposes SnapcastService (clients, groups, streams).
+# Disabled → the service is still reachable but every RPC returns
+# FAILED_PRECONDITION (reflection-based UIs still see it exists).
+enabled = false
+host = "127.0.0.1"
+port = 1705
+# Forward snapserver push notifications onto the in-process event bus so
+# `zerod events tail --filter snap` catches external `snapctl` changes.
+forward_notifications = true

@@ -29,6 +29,44 @@ pub struct Settings {
     pub mdns: MdnsSettings,
     #[serde(default)]
     pub configs: Vec<ManagedConfig>,
+    #[serde(default)]
+    pub snapcast: SnapcastSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct SnapcastSettings {
+    /// Connect to a snapserver on startup and expose `SnapcastService`.
+    /// When `false`, the service is still reachable but every RPC returns
+    /// `FAILED_PRECONDITION` so reflection-based clients can see it exists.
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_snap_host")]
+    pub host: String,
+    #[serde(default = "default_snap_port")]
+    pub port: u16,
+    /// Forward snapserver push notifications onto the in-process event bus.
+    /// Useful so external `snapctl` changes still surface to `events tail`.
+    #[serde(default = "default_true")]
+    pub forward_notifications: bool,
+}
+
+impl Default for SnapcastSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            host: default_snap_host(),
+            port: default_snap_port(),
+            forward_notifications: true,
+        }
+    }
+}
+
+fn default_snap_host() -> String {
+    "127.0.0.1".to_string()
+}
+
+fn default_snap_port() -> u16 {
+    1705
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -88,6 +126,7 @@ impl Default for Settings {
             systemd: SystemdSettings::default(),
             mdns: MdnsSettings::default(),
             configs: Vec::new(),
+            snapcast: SnapcastSettings::default(),
         }
     }
 }

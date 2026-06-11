@@ -22,6 +22,7 @@ zerod-config = { path = "../config" }
 zerod-discovery = { path = "../discovery" }
 zerod-events = { path = "../events" }
 zerod-proto = { path = "../proto" }
+zerod-snapcast = { path = "../snapcast" }
 zerod-stream = { path = "../stream" }
 zerod-systemd = { path = "../systemd" }
 zerod-volume = { path = "../volume" }

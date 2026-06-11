@@ -17,6 +17,7 @@ members = [
     "crates/discovery",
     "crates/events",
     "crates/server",
+    "crates/snapcast",
     "crates/volume",
 ]
 

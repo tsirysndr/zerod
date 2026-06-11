@@ -106,8 +106,41 @@ enum Command {
     /// Subscribe to server-side events (server-streaming).
     #[command(subcommand)]
     Events(EventsCmd),
+    /// Control a Snapcast server (snapserver JSON-RPC).
+    #[command(subcommand)]
+    Snapcast(SnapcastCmd),
     /// Browse mDNS for zerod servers on the LAN.
     Discover,
+}
+
+#[derive(Subcommand)]
+enum SnapcastCmd {
+    /// Dump the full server status as JSON.
+    Status,
+    /// List clients across all groups.
+    Clients,
+    /// List configured streams.
+    Streams,
+    /// Set a client's volume (0..=100). Pass --muted to also mute.
+    Volume {
+        client_id: String,
+        percent: u32,
+        #[arg(long)]
+        muted: bool,
+    },
+    /// Set a client's audio latency offset in milliseconds.
+    Latency { client_id: String, ms: i32 },
+    /// Rename a client.
+    Name { client_id: String, name: String },
+    /// Move a group to a different stream.
+    GroupStream { group_id: String, stream_id: String },
+    /// Mute / unmute a group.
+    GroupMute { group_id: String, muted: bool },
+    /// Replace the client list for a group.
+    GroupClients {
+        group_id: String,
+        client_ids: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -308,6 +341,7 @@ async fn main() -> Result<()> {
         Some(Command::System(cmd)) => run_system(&endpoint.unwrap(), bearer_token, cmd).await,
         Some(Command::Volume(cmd)) => run_volume(&endpoint.unwrap(), bearer_token, cmd).await,
         Some(Command::Events(cmd)) => run_events(&endpoint.unwrap(), bearer_token, cmd).await,
+        Some(Command::Snapcast(cmd)) => run_snapcast(&endpoint.unwrap(), bearer_token, cmd).await,
     }
 }
 
@@ -825,6 +859,131 @@ fn event_to_json(ev: &pb::Event) -> serde_json::Value {
         "timestamp_ms": ev.timestamp_ms,
         "kind": kind,
         "payload": payload,
+    })
+}
+
+// --- snapcast --------------------------------------------------------------
+
+async fn run_snapcast(ep: &Endpoint, token: Option<String>, cmd: SnapcastCmd) -> Result<()> {
+    let ch = channel(ep).await?;
+    let mut client = pb::snapcast_service_client::SnapcastServiceClient::new(ch);
+    match cmd {
+        SnapcastCmd::Status => {
+            let r = client
+                .get_server_status(attach_token(
+                    Request::new(pb::GetServerStatusRequest {}),
+                    &token,
+                ))
+                .await?
+                .into_inner();
+            print_json(&serde_json::to_value(snap_server_to_json(r.server.as_ref()))?)?;
+        }
+        SnapcastCmd::Clients => {
+            let r = client
+                .list_clients(attach_token(Request::new(pb::ListClientsRequest {}), &token))
+                .await?
+                .into_inner();
+            for c in r.clients {
+                println!(
+                    "{:36}  {:24}  connected={}  vol={}%  muted={}  latency={}ms  host={}",
+                    c.id, c.name, c.connected, c.volume_percent, c.muted, c.latency_ms, c.host,
+                );
+            }
+        }
+        SnapcastCmd::Streams => {
+            let r = client
+                .list_snap_streams(attach_token(
+                    Request::new(pb::ListSnapStreamsRequest {}),
+                    &token,
+                ))
+                .await?
+                .into_inner();
+            for s in r.streams {
+                println!("{:24}  {}", s.id, s.status);
+            }
+        }
+        SnapcastCmd::Volume { client_id, percent, muted } => {
+            client
+                .set_client_volume(attach_token(
+                    Request::new(pb::SetClientVolumeRequest {
+                        client_id,
+                        volume_percent: percent,
+                        muted,
+                    }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
+        }
+        SnapcastCmd::Latency { client_id, ms } => {
+            client
+                .set_client_latency(attach_token(
+                    Request::new(pb::SetClientLatencyRequest {
+                        client_id,
+                        latency_ms: ms,
+                    }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
+        }
+        SnapcastCmd::Name { client_id, name } => {
+            client
+                .set_client_name(attach_token(
+                    Request::new(pb::SetClientNameRequest { client_id, name }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
+        }
+        SnapcastCmd::GroupStream { group_id, stream_id } => {
+            client
+                .set_group_stream(attach_token(
+                    Request::new(pb::SetGroupStreamRequest { group_id, stream_id }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
+        }
+        SnapcastCmd::GroupMute { group_id, muted } => {
+            client
+                .set_group_mute(attach_token(
+                    Request::new(pb::SetGroupMuteRequest { group_id, muted }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
+        }
+        SnapcastCmd::GroupClients { group_id, client_ids } => {
+            client
+                .set_group_clients(attach_token(
+                    Request::new(pb::SetGroupClientsRequest { group_id, client_ids }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
+        }
+    }
+    Ok(())
+}
+
+fn snap_server_to_json(s: Option<&pb::SnapServer>) -> serde_json::Value {
+    use serde_json::json;
+    let Some(s) = s else {
+        return json!({"groups": [], "streams": []});
+    };
+    json!({
+        "groups": s.groups.iter().map(|g| json!({
+            "id": g.id,
+            "name": g.name,
+            "stream_id": g.stream_id,
+            "muted": g.muted,
+            "client_ids": g.client_ids,
+        })).collect::<Vec<_>>(),
+        "streams": s.streams.iter().map(|st| json!({
+            "id": st.id,
+            "status": st.status,
+        })).collect::<Vec<_>>(),
     })
 }
 

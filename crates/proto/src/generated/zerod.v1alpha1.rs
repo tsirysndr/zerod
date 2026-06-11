@@ -4416,3 +4416,1071 @@ pub mod events_service_server {
         const NAME: &'static str = SERVICE_NAME;
     }
 }
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SnapVolume {
+    #[prost(uint32, tag = "1")]
+    pub percent: u32,
+    #[prost(bool, tag = "2")]
+    pub muted: bool,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SnapClient {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    /// config.name (best-effort display name)
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(bool, tag = "3")]
+    pub connected: bool,
+    #[prost(uint32, tag = "4")]
+    pub volume_percent: u32,
+    #[prost(bool, tag = "5")]
+    pub muted: bool,
+    #[prost(int32, tag = "6")]
+    pub latency_ms: i32,
+    #[prost(string, tag = "7")]
+    pub mac: ::prost::alloc::string::String,
+    /// host.name
+    #[prost(string, tag = "8")]
+    pub host: ::prost::alloc::string::String,
+    /// snapclient.version
+    #[prost(string, tag = "9")]
+    pub version: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SnapGroup {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+    #[prost(string, tag = "3")]
+    pub stream_id: ::prost::alloc::string::String,
+    #[prost(bool, tag = "4")]
+    pub muted: bool,
+    #[prost(string, repeated, tag = "5")]
+    pub client_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SnapStream {
+    #[prost(string, tag = "1")]
+    pub id: ::prost::alloc::string::String,
+    /// "playing" / "idle" / etc.
+    #[prost(string, tag = "2")]
+    pub status: ::prost::alloc::string::String,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SnapServer {
+    #[prost(message, repeated, tag = "1")]
+    pub groups: ::prost::alloc::vec::Vec<SnapGroup>,
+    #[prost(message, repeated, tag = "2")]
+    pub streams: ::prost::alloc::vec::Vec<SnapStream>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct GetServerStatusRequest {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct GetServerStatusResponse {
+    #[prost(message, optional, tag = "1")]
+    pub server: ::core::option::Option<SnapServer>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct ListClientsRequest {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListClientsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub clients: ::prost::alloc::vec::Vec<SnapClient>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct ListSnapStreamsRequest {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct ListSnapStreamsResponse {
+    #[prost(message, repeated, tag = "1")]
+    pub streams: ::prost::alloc::vec::Vec<SnapStream>,
+}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetClientVolumeRequest {
+    #[prost(string, tag = "1")]
+    pub client_id: ::prost::alloc::string::String,
+    /// 0..=100
+    #[prost(uint32, tag = "2")]
+    pub volume_percent: u32,
+    #[prost(bool, tag = "3")]
+    pub muted: bool,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetClientVolumeResponse {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetClientLatencyRequest {
+    #[prost(string, tag = "1")]
+    pub client_id: ::prost::alloc::string::String,
+    #[prost(int32, tag = "2")]
+    pub latency_ms: i32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetClientLatencyResponse {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetClientNameRequest {
+    #[prost(string, tag = "1")]
+    pub client_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub name: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetClientNameResponse {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetGroupStreamRequest {
+    #[prost(string, tag = "1")]
+    pub group_id: ::prost::alloc::string::String,
+    #[prost(string, tag = "2")]
+    pub stream_id: ::prost::alloc::string::String,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetGroupStreamResponse {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetGroupMuteRequest {
+    #[prost(string, tag = "1")]
+    pub group_id: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub muted: bool,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetGroupMuteResponse {}
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct SetGroupClientsRequest {
+    #[prost(string, tag = "1")]
+    pub group_id: ::prost::alloc::string::String,
+    #[prost(string, repeated, tag = "2")]
+    pub client_ids: ::prost::alloc::vec::Vec<::prost::alloc::string::String>,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetGroupClientsResponse {}
+/// Generated client implementations.
+pub mod snapcast_service_client {
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
+    use tonic::codegen::*;
+    use tonic::codegen::http::Uri;
+    #[derive(Debug, Clone)]
+    pub struct SnapcastServiceClient<T> {
+        inner: tonic::client::Grpc<T>,
+    }
+    impl SnapcastServiceClient<tonic::transport::Channel> {
+        /// Attempt to create a new client by connecting to a given endpoint.
+        pub async fn connect<D>(dst: D) -> Result<Self, tonic::transport::Error>
+        where
+            D: TryInto<tonic::transport::Endpoint>,
+            D::Error: Into<StdError>,
+        {
+            let conn = tonic::transport::Endpoint::new(dst)?.connect().await?;
+            Ok(Self::new(conn))
+        }
+    }
+    impl<T> SnapcastServiceClient<T>
+    where
+        T: tonic::client::GrpcService<tonic::body::BoxBody>,
+        T::Error: Into<StdError>,
+        T::ResponseBody: Body<Data = Bytes> + std::marker::Send + 'static,
+        <T::ResponseBody as Body>::Error: Into<StdError> + std::marker::Send,
+    {
+        pub fn new(inner: T) -> Self {
+            let inner = tonic::client::Grpc::new(inner);
+            Self { inner }
+        }
+        pub fn with_origin(inner: T, origin: Uri) -> Self {
+            let inner = tonic::client::Grpc::with_origin(inner, origin);
+            Self { inner }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> SnapcastServiceClient<InterceptedService<T, F>>
+        where
+            F: tonic::service::Interceptor,
+            T::ResponseBody: Default,
+            T: tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+                Response = http::Response<
+                    <T as tonic::client::GrpcService<tonic::body::BoxBody>>::ResponseBody,
+                >,
+            >,
+            <T as tonic::codegen::Service<
+                http::Request<tonic::body::BoxBody>,
+            >>::Error: Into<StdError> + std::marker::Send + std::marker::Sync,
+        {
+            SnapcastServiceClient::new(InterceptedService::new(inner, interceptor))
+        }
+        /// Compress requests with the given encoding.
+        ///
+        /// This requires the server to support it otherwise it might respond with an
+        /// error.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.send_compressed(encoding);
+            self
+        }
+        /// Enable decompressing responses.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.inner = self.inner.accept_compressed(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_decoding_message_size(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.inner = self.inner.max_encoding_message_size(limit);
+            self
+        }
+        pub async fn get_server_status(
+            &mut self,
+            request: impl tonic::IntoRequest<super::GetServerStatusRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetServerStatusResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.SnapcastService/GetServerStatus",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.SnapcastService", "GetServerStatus"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_clients(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListClientsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListClientsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.SnapcastService/ListClients",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.SnapcastService", "ListClients"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn list_snap_streams(
+            &mut self,
+            request: impl tonic::IntoRequest<super::ListSnapStreamsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListSnapStreamsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.SnapcastService/ListSnapStreams",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.SnapcastService", "ListSnapStreams"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_client_volume(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetClientVolumeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetClientVolumeResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.SnapcastService/SetClientVolume",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.SnapcastService", "SetClientVolume"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_client_latency(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetClientLatencyRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetClientLatencyResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.SnapcastService/SetClientLatency",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.SnapcastService", "SetClientLatency"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_client_name(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetClientNameRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetClientNameResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.SnapcastService/SetClientName",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.SnapcastService", "SetClientName"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_group_stream(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetGroupStreamRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetGroupStreamResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.SnapcastService/SetGroupStream",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.SnapcastService", "SetGroupStream"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_group_mute(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetGroupMuteRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetGroupMuteResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.SnapcastService/SetGroupMute",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.SnapcastService", "SetGroupMute"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn set_group_clients(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetGroupClientsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetGroupClientsResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.SnapcastService/SetGroupClients",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.SnapcastService", "SetGroupClients"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+    }
+}
+/// Generated server implementations.
+pub mod snapcast_service_server {
+    #![allow(
+        unused_variables,
+        dead_code,
+        missing_docs,
+        clippy::wildcard_imports,
+        clippy::let_unit_value,
+    )]
+    use tonic::codegen::*;
+    /// Generated trait containing gRPC methods that should be implemented for use with SnapcastServiceServer.
+    #[async_trait]
+    pub trait SnapcastService: std::marker::Send + std::marker::Sync + 'static {
+        async fn get_server_status(
+            &self,
+            request: tonic::Request<super::GetServerStatusRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::GetServerStatusResponse>,
+            tonic::Status,
+        >;
+        async fn list_clients(
+            &self,
+            request: tonic::Request<super::ListClientsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListClientsResponse>,
+            tonic::Status,
+        >;
+        async fn list_snap_streams(
+            &self,
+            request: tonic::Request<super::ListSnapStreamsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::ListSnapStreamsResponse>,
+            tonic::Status,
+        >;
+        async fn set_client_volume(
+            &self,
+            request: tonic::Request<super::SetClientVolumeRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetClientVolumeResponse>,
+            tonic::Status,
+        >;
+        async fn set_client_latency(
+            &self,
+            request: tonic::Request<super::SetClientLatencyRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetClientLatencyResponse>,
+            tonic::Status,
+        >;
+        async fn set_client_name(
+            &self,
+            request: tonic::Request<super::SetClientNameRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetClientNameResponse>,
+            tonic::Status,
+        >;
+        async fn set_group_stream(
+            &self,
+            request: tonic::Request<super::SetGroupStreamRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetGroupStreamResponse>,
+            tonic::Status,
+        >;
+        async fn set_group_mute(
+            &self,
+            request: tonic::Request<super::SetGroupMuteRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetGroupMuteResponse>,
+            tonic::Status,
+        >;
+        async fn set_group_clients(
+            &self,
+            request: tonic::Request<super::SetGroupClientsRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetGroupClientsResponse>,
+            tonic::Status,
+        >;
+    }
+    #[derive(Debug)]
+    pub struct SnapcastServiceServer<T> {
+        inner: Arc<T>,
+        accept_compression_encodings: EnabledCompressionEncodings,
+        send_compression_encodings: EnabledCompressionEncodings,
+        max_decoding_message_size: Option<usize>,
+        max_encoding_message_size: Option<usize>,
+    }
+    impl<T> SnapcastServiceServer<T> {
+        pub fn new(inner: T) -> Self {
+            Self::from_arc(Arc::new(inner))
+        }
+        pub fn from_arc(inner: Arc<T>) -> Self {
+            Self {
+                inner,
+                accept_compression_encodings: Default::default(),
+                send_compression_encodings: Default::default(),
+                max_decoding_message_size: None,
+                max_encoding_message_size: None,
+            }
+        }
+        pub fn with_interceptor<F>(
+            inner: T,
+            interceptor: F,
+        ) -> InterceptedService<Self, F>
+        where
+            F: tonic::service::Interceptor,
+        {
+            InterceptedService::new(Self::new(inner), interceptor)
+        }
+        /// Enable decompressing requests with the given encoding.
+        #[must_use]
+        pub fn accept_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.accept_compression_encodings.enable(encoding);
+            self
+        }
+        /// Compress responses with the given encoding, if the client supports it.
+        #[must_use]
+        pub fn send_compressed(mut self, encoding: CompressionEncoding) -> Self {
+            self.send_compression_encodings.enable(encoding);
+            self
+        }
+        /// Limits the maximum size of a decoded message.
+        ///
+        /// Default: `4MB`
+        #[must_use]
+        pub fn max_decoding_message_size(mut self, limit: usize) -> Self {
+            self.max_decoding_message_size = Some(limit);
+            self
+        }
+        /// Limits the maximum size of an encoded message.
+        ///
+        /// Default: `usize::MAX`
+        #[must_use]
+        pub fn max_encoding_message_size(mut self, limit: usize) -> Self {
+            self.max_encoding_message_size = Some(limit);
+            self
+        }
+    }
+    impl<T, B> tonic::codegen::Service<http::Request<B>> for SnapcastServiceServer<T>
+    where
+        T: SnapcastService,
+        B: Body + std::marker::Send + 'static,
+        B::Error: Into<StdError> + std::marker::Send + 'static,
+    {
+        type Response = http::Response<tonic::body::BoxBody>;
+        type Error = std::convert::Infallible;
+        type Future = BoxFuture<Self::Response, Self::Error>;
+        fn poll_ready(
+            &mut self,
+            _cx: &mut Context<'_>,
+        ) -> Poll<std::result::Result<(), Self::Error>> {
+            Poll::Ready(Ok(()))
+        }
+        fn call(&mut self, req: http::Request<B>) -> Self::Future {
+            match req.uri().path() {
+                "/zerod.v1alpha1.SnapcastService/GetServerStatus" => {
+                    #[allow(non_camel_case_types)]
+                    struct GetServerStatusSvc<T: SnapcastService>(pub Arc<T>);
+                    impl<
+                        T: SnapcastService,
+                    > tonic::server::UnaryService<super::GetServerStatusRequest>
+                    for GetServerStatusSvc<T> {
+                        type Response = super::GetServerStatusResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::GetServerStatusRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as SnapcastService>::get_server_status(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = GetServerStatusSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.SnapcastService/ListClients" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListClientsSvc<T: SnapcastService>(pub Arc<T>);
+                    impl<
+                        T: SnapcastService,
+                    > tonic::server::UnaryService<super::ListClientsRequest>
+                    for ListClientsSvc<T> {
+                        type Response = super::ListClientsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListClientsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as SnapcastService>::list_clients(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListClientsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.SnapcastService/ListSnapStreams" => {
+                    #[allow(non_camel_case_types)]
+                    struct ListSnapStreamsSvc<T: SnapcastService>(pub Arc<T>);
+                    impl<
+                        T: SnapcastService,
+                    > tonic::server::UnaryService<super::ListSnapStreamsRequest>
+                    for ListSnapStreamsSvc<T> {
+                        type Response = super::ListSnapStreamsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::ListSnapStreamsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as SnapcastService>::list_snap_streams(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = ListSnapStreamsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.SnapcastService/SetClientVolume" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetClientVolumeSvc<T: SnapcastService>(pub Arc<T>);
+                    impl<
+                        T: SnapcastService,
+                    > tonic::server::UnaryService<super::SetClientVolumeRequest>
+                    for SetClientVolumeSvc<T> {
+                        type Response = super::SetClientVolumeResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetClientVolumeRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as SnapcastService>::set_client_volume(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetClientVolumeSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.SnapcastService/SetClientLatency" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetClientLatencySvc<T: SnapcastService>(pub Arc<T>);
+                    impl<
+                        T: SnapcastService,
+                    > tonic::server::UnaryService<super::SetClientLatencyRequest>
+                    for SetClientLatencySvc<T> {
+                        type Response = super::SetClientLatencyResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetClientLatencyRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as SnapcastService>::set_client_latency(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetClientLatencySvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.SnapcastService/SetClientName" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetClientNameSvc<T: SnapcastService>(pub Arc<T>);
+                    impl<
+                        T: SnapcastService,
+                    > tonic::server::UnaryService<super::SetClientNameRequest>
+                    for SetClientNameSvc<T> {
+                        type Response = super::SetClientNameResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetClientNameRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as SnapcastService>::set_client_name(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetClientNameSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.SnapcastService/SetGroupStream" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetGroupStreamSvc<T: SnapcastService>(pub Arc<T>);
+                    impl<
+                        T: SnapcastService,
+                    > tonic::server::UnaryService<super::SetGroupStreamRequest>
+                    for SetGroupStreamSvc<T> {
+                        type Response = super::SetGroupStreamResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetGroupStreamRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as SnapcastService>::set_group_stream(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetGroupStreamSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.SnapcastService/SetGroupMute" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetGroupMuteSvc<T: SnapcastService>(pub Arc<T>);
+                    impl<
+                        T: SnapcastService,
+                    > tonic::server::UnaryService<super::SetGroupMuteRequest>
+                    for SetGroupMuteSvc<T> {
+                        type Response = super::SetGroupMuteResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetGroupMuteRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as SnapcastService>::set_group_mute(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetGroupMuteSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.SnapcastService/SetGroupClients" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetGroupClientsSvc<T: SnapcastService>(pub Arc<T>);
+                    impl<
+                        T: SnapcastService,
+                    > tonic::server::UnaryService<super::SetGroupClientsRequest>
+                    for SetGroupClientsSvc<T> {
+                        type Response = super::SetGroupClientsResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetGroupClientsRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as SnapcastService>::set_group_clients(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetGroupClientsSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                _ => {
+                    Box::pin(async move {
+                        let mut response = http::Response::new(empty_body());
+                        let headers = response.headers_mut();
+                        headers
+                            .insert(
+                                tonic::Status::GRPC_STATUS,
+                                (tonic::Code::Unimplemented as i32).into(),
+                            );
+                        headers
+                            .insert(
+                                http::header::CONTENT_TYPE,
+                                tonic::metadata::GRPC_CONTENT_TYPE,
+                            );
+                        Ok(response)
+                    })
+                }
+            }
+        }
+    }
+    impl<T> Clone for SnapcastServiceServer<T> {
+        fn clone(&self) -> Self {
+            let inner = self.inner.clone();
+            Self {
+                inner,
+                accept_compression_encodings: self.accept_compression_encodings,
+                send_compression_encodings: self.send_compression_encodings,
+                max_decoding_message_size: self.max_decoding_message_size,
+                max_encoding_message_size: self.max_encoding_message_size,
+            }
+        }
+    }
+    /// Generated gRPC service name
+    pub const SERVICE_NAME: &str = "zerod.v1alpha1.SnapcastService";
+    impl<T> tonic::server::NamedService for SnapcastServiceServer<T> {
+        const NAME: &'static str = SERVICE_NAME;
+    }
+}
