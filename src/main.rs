@@ -8,6 +8,7 @@
 //! `zerod config get …`
 
 use anyhow::{Context, Result};
+use clap::builder::styling::{Color, RgbColor, Style, Styles};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use tonic::metadata::MetadataValue;
@@ -17,8 +18,32 @@ use zerod_proto::v1alpha1 as pb;
 
 mod service;
 
+// Charm-inspired neon violet palette for the clap help menu.
+// #7D56F4 — Charm signature purple-violet-blue (headers, usage line)
+// #A78BFA — bright violet (commands, flags, valid values)
+// #C4B5FD — soft lavender (placeholders / value names)
+// #FF5C8A — pink-red (errors, invalid values)
+const CHARM_VIOLET: Color = Color::Rgb(RgbColor(0x7D, 0x56, 0xF4));
+const NEON_VIOLET: Color = Color::Rgb(RgbColor(0xA7, 0x8B, 0xFA));
+const SOFT_LAVENDER: Color = Color::Rgb(RgbColor(0xC4, 0xB5, 0xFD));
+const NEON_PINK_ERR: Color = Color::Rgb(RgbColor(0xFF, 0x5C, 0x8A));
+
+const STYLES: Styles = Styles::styled()
+    .header(Style::new().bold().underline().fg_color(Some(CHARM_VIOLET)))
+    .usage(Style::new().bold().fg_color(Some(CHARM_VIOLET)))
+    .literal(Style::new().bold().fg_color(Some(NEON_VIOLET)))
+    .placeholder(Style::new().fg_color(Some(SOFT_LAVENDER)))
+    .valid(Style::new().bold().fg_color(Some(NEON_VIOLET)))
+    .invalid(Style::new().bold().fg_color(Some(NEON_PINK_ERR)))
+    .error(Style::new().bold().fg_color(Some(NEON_PINK_ERR)));
+
 #[derive(Parser)]
-#[command(name = "zerod", version, about = "headless audio/bluetooth/systemd control daemon")]
+#[command(
+    name = "zerod",
+    version,
+    about = "headless audio/bluetooth/systemd control daemon",
+    styles = STYLES,
+)]
 struct Cli {
     /// Path to zerod.toml. Server mode only.
     #[arg(long, global = true)]

@@ -1,6 +1,8 @@
 # zerod
 [![release](https://github.com/tsirysndr/zerod/actions/workflows/release.yml/badge.svg)](https://github.com/tsirysndr/zerod/actions/workflows/release.yml)
 
+![zerod help preview](.github/assets/preview.png)
+
 Headless audio + Bluetooth + systemd control daemon for Linux audio appliances
 (Raspberry Pi, single-board computers running Snapcast, shairport-sync,
 squeezelite, …). One binary, one gRPC port, one TOML file.
