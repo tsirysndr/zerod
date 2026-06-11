@@ -4269,6 +4269,7 @@ dependencies = [
  "anyhow",
  "bluer",
  "futures",
+ "once_cell",
  "serde",
  "tokio",
  "tracing",

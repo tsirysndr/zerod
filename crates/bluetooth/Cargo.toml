@@ -5,11 +5,15 @@ edition = "2021"
 
 [dependencies]
 anyhow = { workspace = true }
+once_cell = { workspace = true }
 serde = { workspace = true }
 tracing = { workspace = true }
 zerod-events = { path = "../events" }
 
 [target.'cfg(target_os = "linux")'.dependencies]
-bluer = { version = "0.17", features = ["bluetoothd"] }
+# Agent callback shape varies across bluer minor versions — pin exact
+# so a `cargo update` doesn't silently rewire the pairing flow. Verify
+# with `cargo doc -p bluer --open` before bumping.
+bluer = { version = "=0.17.4", features = ["bluetoothd"] }
 futures = { workspace = true }
 tokio = { workspace = true }

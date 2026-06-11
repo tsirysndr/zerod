@@ -35,6 +35,32 @@ message DisconnectResponse {}
 message RemoveRequest { string address = 1; }
 message RemoveResponse {}
 
+message SetDiscoverableRequest {
+  bool discoverable = 1;
+  // 0 → no automatic switch-off while discoverable=true.
+  uint32 timeout_secs = 2;
+}
+message SetDiscoverableResponse {}
+
+// Respond to a pending pairing prompt previously surfaced via the
+// `BluetoothPairingRequest` event. Has no effect when
+// `[bluetooth.a2dp].auto_accept_pairings = true` (the agent already
+// accepted the prompt before publishing the event).
+message RespondPairingRequest {
+  string address = 1;
+  bool accept = 2;
+}
+message RespondPairingResponse {}
+
+// One-shot helper: start the bluealsa-aplay unit and flip the adapter
+// discoverable. Returns FAILED_PRECONDITION if A2DP mode isn't enabled
+// in zerod.toml or the audio backend unit isn't installed.
+message A2dpEnableRequest {}
+message A2dpEnableResponse {}
+
+message A2dpDisableRequest {}
+message A2dpDisableResponse {}
+
 service BluetoothService {
   rpc Scan(ScanRequest) returns (ScanResponse);
   rpc ListDevices(ListDevicesRequest) returns (ListDevicesResponse);
@@ -42,4 +68,8 @@ service BluetoothService {
   rpc ConnectDevice(ConnectDeviceRequest) returns (ConnectDeviceResponse);
   rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
   rpc Remove(RemoveRequest) returns (RemoveResponse);
+  rpc SetDiscoverable(SetDiscoverableRequest) returns (SetDiscoverableResponse);
+  rpc RespondPairing(RespondPairingRequest) returns (RespondPairingResponse);
+  rpc A2dpEnable(A2dpEnableRequest) returns (A2dpEnableResponse);
+  rpc A2dpDisable(A2dpDisableRequest) returns (A2dpDisableResponse);
 }

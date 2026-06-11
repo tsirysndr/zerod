@@ -36,6 +36,19 @@ pub async fn serve(settings: Settings) -> Result<()> {
     let bearer = resolve_bearer_token(&settings.server.bearer_token)?;
     let snap_svc = build_snapcast_svc(&settings.snapcast);
 
+    if settings.bluetooth.a2dp.enabled {
+        let a2dp = settings.bluetooth.a2dp.clone();
+        let cfg = zerod_bluetooth::A2dpConfig {
+            auto_accept_pairings: a2dp.auto_accept_pairings,
+            adapter_alias: a2dp.adapter_alias,
+            discoverable_on_boot: a2dp.discoverable_on_boot,
+            discoverable_timeout_secs: a2dp.discoverable_timeout_secs,
+        };
+        if let Err(e) = zerod_bluetooth::start_agent(cfg).await {
+            tracing::warn!("bluetooth: failed to start pairing agent: {e:#}");
+        }
+    }
+
     let _mdns = maybe_advertise(&settings.mdns, addr.port());
 
     let reflection = tonic_reflection::server::Builder::configure()
@@ -64,7 +77,7 @@ pub async fn serve(settings: Settings) -> Result<()> {
             interceptor.clone(),
         ))
         .add_service(BluetoothServiceServer::with_interceptor(
-            bluetooth::BluetoothSvc::default(),
+            bluetooth::BluetoothSvc::new(settings.bluetooth.a2dp.clone(), allow.clone()),
             interceptor.clone(),
         ))
         .add_service(StreamServiceServer::with_interceptor(

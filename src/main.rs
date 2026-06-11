@@ -109,8 +109,19 @@ enum Command {
     /// Control a Snapcast server (snapserver JSON-RPC).
     #[command(subcommand)]
     Snapcast(SnapcastCmd),
+    /// Toggle the Pi as a Bluetooth audio sink (A2DP via bluealsa-aplay).
+    #[command(subcommand)]
+    A2dp(A2dpCmd),
     /// Browse mDNS for zerod servers on the LAN.
     Discover,
+}
+
+#[derive(Subcommand)]
+enum A2dpCmd {
+    /// Start bluealsa-aplay and flip the adapter discoverable.
+    Enable,
+    /// Stop bluealsa-aplay and clear discoverable.
+    Disable,
 }
 
 #[derive(Subcommand)]
@@ -186,6 +197,26 @@ enum BluetoothCmd {
     Connect { address: String },
     Disconnect { address: String },
     Remove { address: String },
+    /// Flip the adapter discoverable / not-discoverable.
+    Discoverable {
+        #[arg(value_enum)]
+        state: OnOff,
+        /// 0 → no auto-switch-off while discoverable=on.
+        #[arg(long, default_value_t = 0)]
+        timeout: u32,
+    },
+    /// Resolve a pending pairing prompt surfaced via the bt.pairing event.
+    RespondPairing {
+        address: String,
+        #[arg(long)]
+        accept: bool,
+    },
+}
+
+#[derive(Clone, Copy, clap::ValueEnum)]
+enum OnOff {
+    On,
+    Off,
 }
 
 #[derive(Subcommand)]
@@ -359,6 +390,7 @@ async fn main() -> Result<()> {
         Some(Command::Volume(cmd)) => run_volume(&endpoint.unwrap(), bearer_token, cmd).await,
         Some(Command::Events(cmd)) => run_events(&endpoint.unwrap(), bearer_token, cmd).await,
         Some(Command::Snapcast(cmd)) => run_snapcast(&endpoint.unwrap(), bearer_token, cmd).await,
+        Some(Command::A2dp(cmd)) => run_a2dp(&endpoint.unwrap(), bearer_token, cmd).await,
     }
 }
 
@@ -547,6 +579,50 @@ async fn run_bluetooth(ep: &Endpoint, token: Option<String>, cmd: BluetoothCmd) 
         }
         BluetoothCmd::Remove { address } => {
             client.remove(attach_token(Request::new(pb::RemoveRequest { address }), &token)).await?;
+            println!("ok");
+        }
+        BluetoothCmd::Discoverable { state, timeout } => {
+            let discoverable = matches!(state, OnOff::On);
+            client
+                .set_discoverable(attach_token(
+                    Request::new(pb::SetDiscoverableRequest {
+                        discoverable,
+                        timeout_secs: timeout,
+                    }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
+        }
+        BluetoothCmd::RespondPairing { address, accept } => {
+            client
+                .respond_pairing(attach_token(
+                    Request::new(pb::RespondPairingRequest { address, accept }),
+                    &token,
+                ))
+                .await?;
+            println!("ok");
+        }
+    }
+    Ok(())
+}
+
+// --- a2dp ------------------------------------------------------------------
+
+async fn run_a2dp(ep: &Endpoint, token: Option<String>, cmd: A2dpCmd) -> Result<()> {
+    let ch = channel(ep).await?;
+    let mut client = pb::bluetooth_service_client::BluetoothServiceClient::new(ch);
+    match cmd {
+        A2dpCmd::Enable => {
+            client
+                .a2dp_enable(attach_token(Request::new(pb::A2dpEnableRequest {}), &token))
+                .await?;
+            println!("ok");
+        }
+        A2dpCmd::Disable => {
+            client
+                .a2dp_disable(attach_token(Request::new(pb::A2dpDisableRequest {}), &token))
+                .await?;
             println!("ok");
         }
     }

@@ -33,6 +33,64 @@ pub struct Settings {
     pub snapcast: SnapcastSettings,
     #[serde(default)]
     pub librespot: LibrespotSettings,
+    #[serde(default)]
+    pub bluetooth: BluetoothSettings,
+}
+
+#[derive(Debug, Clone, Default, Deserialize, Serialize)]
+pub struct BluetoothSettings {
+    #[serde(default)]
+    pub a2dp: A2dpSettings,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct A2dpSettings {
+    /// Register a BlueZ pairing agent and (when `discoverable_on_boot`)
+    /// flip the adapter discoverable at startup. When false, the agent
+    /// isn't registered and `BluetoothService.A2dpEnable` returns
+    /// FAILED_PRECONDITION.
+    #[serde(default)]
+    pub enabled: bool,
+    /// systemd unit responsible for actually routing decoded BlueZ audio
+    /// to ALSA. zerod doesn't decode SBC/AAC — bluealsa-aplay does.
+    /// Auto-appended to the systemd allowlist at boot when `enabled`.
+    #[serde(default = "default_bluealsa_unit")]
+    pub bluealsa_aplay_unit: String,
+    /// Accept every pairing prompt without waiting for a `RespondPairing`
+    /// RPC. Convenient for a kiosk-style setup; risky on a public LAN.
+    #[serde(default)]
+    pub auto_accept_pairings: bool,
+    /// Friendly name advertised to phones (set as adapter `Alias`).
+    /// Empty → leave the existing alias untouched.
+    #[serde(default = "default_adapter_alias")]
+    pub adapter_alias: String,
+    /// Flip the adapter to discoverable at server boot.
+    #[serde(default = "default_true")]
+    pub discoverable_on_boot: bool,
+    /// Discoverable window in seconds. 0 → discoverable forever.
+    #[serde(default)]
+    pub discoverable_timeout_secs: u32,
+}
+
+impl Default for A2dpSettings {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            bluealsa_aplay_unit: default_bluealsa_unit(),
+            auto_accept_pairings: false,
+            adapter_alias: default_adapter_alias(),
+            discoverable_on_boot: true,
+            discoverable_timeout_secs: 0,
+        }
+    }
+}
+
+fn default_bluealsa_unit() -> String {
+    "bluealsa-aplay.service".to_string()
+}
+
+fn default_adapter_alias() -> String {
+    "zerod".to_string()
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -178,15 +236,24 @@ impl Default for Settings {
             configs: Vec::new(),
             snapcast: SnapcastSettings::default(),
             librespot: LibrespotSettings::default(),
+            bluetooth: BluetoothSettings::default(),
         }
     }
 }
 
 impl Settings {
     pub fn systemd_allowlist(&self) -> UnitAllowlist {
-        UnitAllowlist {
-            units: self.systemd.units.clone(),
+        let mut units = self.systemd.units.clone();
+        // When A2DP sink mode is on, zerod manages bluealsa-aplay through
+        // the existing SystemdService — auto-allowlist it so users don't
+        // have to remember to add it manually.
+        if self.bluetooth.a2dp.enabled {
+            let unit = self.bluetooth.a2dp.bluealsa_aplay_unit.clone();
+            if !unit.is_empty() && !units.iter().any(|u| u == &unit) {
+                units.push(unit);
+            }
         }
+        UnitAllowlist { units }
     }
 
     pub fn config_registry(&self) -> Registry {

@@ -60,6 +60,40 @@ pub struct RemoveRequest {
 }
 #[derive(Clone, Copy, PartialEq, ::prost::Message)]
 pub struct RemoveResponse {}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetDiscoverableRequest {
+    #[prost(bool, tag = "1")]
+    pub discoverable: bool,
+    /// 0 → no automatic switch-off while discoverable=true.
+    #[prost(uint32, tag = "2")]
+    pub timeout_secs: u32,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct SetDiscoverableResponse {}
+/// Respond to a pending pairing prompt previously surfaced via the
+/// `BluetoothPairingRequest` event. Has no effect when
+/// `\[bluetooth.a2dp\].auto_accept_pairings = true` (the agent already
+/// accepted the prompt before publishing the event).
+#[derive(Clone, PartialEq, ::prost::Message)]
+pub struct RespondPairingRequest {
+    #[prost(string, tag = "1")]
+    pub address: ::prost::alloc::string::String,
+    #[prost(bool, tag = "2")]
+    pub accept: bool,
+}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct RespondPairingResponse {}
+/// One-shot helper: start the bluealsa-aplay unit and flip the adapter
+/// discoverable. Returns FAILED_PRECONDITION if A2DP mode isn't enabled
+/// in zerod.toml or the audio backend unit isn't installed.
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct A2dpEnableRequest {}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct A2dpEnableResponse {}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct A2dpDisableRequest {}
+#[derive(Clone, Copy, PartialEq, ::prost::Message)]
+pub struct A2dpDisableResponse {}
 /// Generated client implementations.
 pub mod bluetooth_service_client {
     #![allow(
@@ -292,6 +326,110 @@ pub mod bluetooth_service_client {
                 .insert(GrpcMethod::new("zerod.v1alpha1.BluetoothService", "Remove"));
             self.inner.unary(req, path, codec).await
         }
+        pub async fn set_discoverable(
+            &mut self,
+            request: impl tonic::IntoRequest<super::SetDiscoverableRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetDiscoverableResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.BluetoothService/SetDiscoverable",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.BluetoothService", "SetDiscoverable"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn respond_pairing(
+            &mut self,
+            request: impl tonic::IntoRequest<super::RespondPairingRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::RespondPairingResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.BluetoothService/RespondPairing",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.BluetoothService", "RespondPairing"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn a2dp_enable(
+            &mut self,
+            request: impl tonic::IntoRequest<super::A2dpEnableRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::A2dpEnableResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.BluetoothService/A2dpEnable",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.BluetoothService", "A2dpEnable"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
+        pub async fn a2dp_disable(
+            &mut self,
+            request: impl tonic::IntoRequest<super::A2dpDisableRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::A2dpDisableResponse>,
+            tonic::Status,
+        > {
+            self.inner
+                .ready()
+                .await
+                .map_err(|e| {
+                    tonic::Status::unknown(
+                        format!("Service was not ready: {}", e.into()),
+                    )
+                })?;
+            let codec = tonic::codec::ProstCodec::default();
+            let path = http::uri::PathAndQuery::from_static(
+                "/zerod.v1alpha1.BluetoothService/A2dpDisable",
+            );
+            let mut req = request.into_request();
+            req.extensions_mut()
+                .insert(
+                    GrpcMethod::new("zerod.v1alpha1.BluetoothService", "A2dpDisable"),
+                );
+            self.inner.unary(req, path, codec).await
+        }
     }
 }
 /// Generated server implementations.
@@ -340,6 +478,34 @@ pub mod bluetooth_service_server {
             &self,
             request: tonic::Request<super::RemoveRequest>,
         ) -> std::result::Result<tonic::Response<super::RemoveResponse>, tonic::Status>;
+        async fn set_discoverable(
+            &self,
+            request: tonic::Request<super::SetDiscoverableRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::SetDiscoverableResponse>,
+            tonic::Status,
+        >;
+        async fn respond_pairing(
+            &self,
+            request: tonic::Request<super::RespondPairingRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::RespondPairingResponse>,
+            tonic::Status,
+        >;
+        async fn a2dp_enable(
+            &self,
+            request: tonic::Request<super::A2dpEnableRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::A2dpEnableResponse>,
+            tonic::Status,
+        >;
+        async fn a2dp_disable(
+            &self,
+            request: tonic::Request<super::A2dpDisableRequest>,
+        ) -> std::result::Result<
+            tonic::Response<super::A2dpDisableResponse>,
+            tonic::Status,
+        >;
     }
     #[derive(Debug)]
     pub struct BluetoothServiceServer<T> {
@@ -671,6 +837,188 @@ pub mod bluetooth_service_server {
                     let inner = self.inner.clone();
                     let fut = async move {
                         let method = RemoveSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.BluetoothService/SetDiscoverable" => {
+                    #[allow(non_camel_case_types)]
+                    struct SetDiscoverableSvc<T: BluetoothService>(pub Arc<T>);
+                    impl<
+                        T: BluetoothService,
+                    > tonic::server::UnaryService<super::SetDiscoverableRequest>
+                    for SetDiscoverableSvc<T> {
+                        type Response = super::SetDiscoverableResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::SetDiscoverableRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BluetoothService>::set_discoverable(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = SetDiscoverableSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.BluetoothService/RespondPairing" => {
+                    #[allow(non_camel_case_types)]
+                    struct RespondPairingSvc<T: BluetoothService>(pub Arc<T>);
+                    impl<
+                        T: BluetoothService,
+                    > tonic::server::UnaryService<super::RespondPairingRequest>
+                    for RespondPairingSvc<T> {
+                        type Response = super::RespondPairingResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::RespondPairingRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BluetoothService>::respond_pairing(&inner, request)
+                                    .await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = RespondPairingSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.BluetoothService/A2dpEnable" => {
+                    #[allow(non_camel_case_types)]
+                    struct A2dpEnableSvc<T: BluetoothService>(pub Arc<T>);
+                    impl<
+                        T: BluetoothService,
+                    > tonic::server::UnaryService<super::A2dpEnableRequest>
+                    for A2dpEnableSvc<T> {
+                        type Response = super::A2dpEnableResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::A2dpEnableRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BluetoothService>::a2dp_enable(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = A2dpEnableSvc(inner);
+                        let codec = tonic::codec::ProstCodec::default();
+                        let mut grpc = tonic::server::Grpc::new(codec)
+                            .apply_compression_config(
+                                accept_compression_encodings,
+                                send_compression_encodings,
+                            )
+                            .apply_max_message_size_config(
+                                max_decoding_message_size,
+                                max_encoding_message_size,
+                            );
+                        let res = grpc.unary(method, req).await;
+                        Ok(res)
+                    };
+                    Box::pin(fut)
+                }
+                "/zerod.v1alpha1.BluetoothService/A2dpDisable" => {
+                    #[allow(non_camel_case_types)]
+                    struct A2dpDisableSvc<T: BluetoothService>(pub Arc<T>);
+                    impl<
+                        T: BluetoothService,
+                    > tonic::server::UnaryService<super::A2dpDisableRequest>
+                    for A2dpDisableSvc<T> {
+                        type Response = super::A2dpDisableResponse;
+                        type Future = BoxFuture<
+                            tonic::Response<Self::Response>,
+                            tonic::Status,
+                        >;
+                        fn call(
+                            &mut self,
+                            request: tonic::Request<super::A2dpDisableRequest>,
+                        ) -> Self::Future {
+                            let inner = Arc::clone(&self.0);
+                            let fut = async move {
+                                <T as BluetoothService>::a2dp_disable(&inner, request).await
+                            };
+                            Box::pin(fut)
+                        }
+                    }
+                    let accept_compression_encodings = self.accept_compression_encodings;
+                    let send_compression_encodings = self.send_compression_encodings;
+                    let max_decoding_message_size = self.max_decoding_message_size;
+                    let max_encoding_message_size = self.max_encoding_message_size;
+                    let inner = self.inner.clone();
+                    let fut = async move {
+                        let method = A2dpDisableSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

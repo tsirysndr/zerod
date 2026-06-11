@@ -79,3 +79,21 @@ bitrate = 320
 # (current directory). --disable-audio-cache is always passed, so this
 # is creds only — pick a persistent path so you don't re-pair every boot.
 cache_path = ""
+
+[bluetooth.a2dp]
+# Make the Pi advertise as a Bluetooth speaker. zerod registers a BlueZ
+# pairing agent and delegates the actual audio path to bluealsa-aplay
+# (install `bluez-alsa-utils` on the device). The unit name below is
+# auto-added to the systemd allowlist when enabled.
+enabled = false
+bluealsa_aplay_unit = "bluealsa-aplay.service"
+# Skip the RespondPairing flow and accept every prompt. Convenient for
+# kiosks; risky on a shared LAN.
+auto_accept_pairings = false
+# Friendly name shown to phones. Empty → leave the adapter alias alone.
+adapter_alias = "zerod"
+# Flip the adapter discoverable at server boot. Set false to defer to
+# the `a2dp enable` RPC.
+discoverable_on_boot = true
+# Discoverable window in seconds. 0 → discoverable forever.
+discoverable_timeout_secs = 0

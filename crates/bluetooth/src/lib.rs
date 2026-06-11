@@ -14,6 +14,18 @@ pub struct BluetoothDevice {
     pub rssi: Option<i32>,
 }
 
+/// A2DP-sink configuration handed to [`start_agent`] at boot.
+#[derive(Debug, Clone, Default)]
+pub struct A2dpConfig {
+    pub auto_accept_pairings: bool,
+    pub adapter_alias: String,
+    pub discoverable_on_boot: bool,
+    pub discoverable_timeout_secs: u32,
+}
+
+#[cfg(target_os = "linux")]
+mod agent;
+
 #[cfg(target_os = "linux")]
 mod imp {
     use super::BluetoothDevice;
@@ -145,6 +157,22 @@ mod imp {
         });
         Ok(())
     }
+
+    pub async fn start_agent(cfg: super::A2dpConfig) -> Result<()> {
+        super::agent::start(cfg).await
+    }
+
+    pub async fn stop_agent() -> Result<()> {
+        super::agent::stop().await
+    }
+
+    pub async fn set_discoverable(on: bool, timeout_secs: u32) -> Result<()> {
+        super::agent::set_discoverable(on, timeout_secs).await
+    }
+
+    pub async fn respond_pairing(address: &str, accept: bool) -> Result<()> {
+        super::agent::respond_pairing(address, accept)
+    }
 }
 
 #[cfg(not(target_os = "linux"))]
@@ -170,6 +198,24 @@ mod imp {
     pub async fn remove(_address: &str) -> Result<()> {
         bail!("bluetooth: linux only")
     }
+    pub async fn start_agent(_cfg: super::A2dpConfig) -> Result<()> {
+        // No-op on non-Linux so the server boots even with a2dp.enabled=true.
+        // The user-visible failure happens at the RPC surface (set_discoverable
+        // / respond_pairing / a2dp_enable).
+        Ok(())
+    }
+    pub async fn stop_agent() -> Result<()> {
+        Ok(())
+    }
+    pub async fn set_discoverable(_on: bool, _timeout_secs: u32) -> Result<()> {
+        bail!("bluetooth: linux only")
+    }
+    pub async fn respond_pairing(_address: &str, _accept: bool) -> Result<()> {
+        bail!("bluetooth: linux only")
+    }
 }
 
-pub use imp::{connect, disconnect, get_devices, pair, remove, scan};
+pub use imp::{
+    connect, disconnect, get_devices, pair, remove, respond_pairing, scan, set_discoverable,
+    start_agent, stop_agent,
+};
