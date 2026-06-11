@@ -26,11 +26,24 @@ Early. Pre-1.0, breaking changes expected.
 - **Bluetooth** — scan / list / pair / connect / disconnect / remove over
   BlueZ (Linux-only via `bluer`). Non-Linux builds compile but return
   `Unimplemented`.
+- **A2DP sink (Pi-as-speaker)** — registers a BlueZ pairing agent so phones
+  can pair with the daemon, then delegates the audio path to
+  `bluealsa-aplay` via the existing systemd allowlist. Pairing prompts
+  surface as events; resolve them with `RespondPairing` or set
+  `auto_accept_pairings = true` for kiosk mode. Linux-only.
 - **HLS / MPEG-DASH player** — fetch + demux + decode (symphonia) → S16LE PCM.
   Three sinks selectable per `Play` call:
   - `cpal` — default audio device (or a named device)
   - `stdout` — raw interleaved S16LE little-endian PCM on stdout
   - `pipe` — same, into a named FIFO (auto-reopens on broken pipe)
+- **Spotify Connect** — spawns `librespot --backend pipe` and pipes its
+  S16LE stdout through the same sink as HLS/DASH. The phone picks the
+  daemon's `[librespot].name` from its Devices list. Linux-only; requires
+  `librespot` installed on the device (`apt install librespot`).
+- **Snapcast control** — JSON-RPC 2.0 client to a local `snapserver` over
+  TCP. List/rename clients, move them between groups, set per-client
+  volume and latency. Push notifications from snapserver flow back onto
+  the event bus so external `snapctl` changes don't go invisible.
 - **Systemd control** — start / stop / restart / reload / enable / disable /
   status via the system D-Bus, restricted to an allowlist. Linux-only.
 - **Volume control** — get / set volume and mute / unmute against any ALSA
@@ -38,6 +51,12 @@ Early. Pre-1.0, breaking changes expected.
   on PipeWire/PulseAudio via ALSA-mixer emulation. Linux-only. Plus a
   per-stream software gain applied in the player loop for the HLS/DASH
   session, independent of the system mixer.
+- **Server-streaming events** — `EventsService.Subscribe(kinds)` fans out
+  state transitions (stream playback, BT pairing prompts, BT
+  connect/disconnect, systemd unit state, ALSA volume, snapcast client
+  changes) without polling. Lossy under backpressure — slow subscribers
+  see a `LaggedEvent` rather than a closed stream. `zerod events tail
+  [--filter ...]` prints one JSON line per event.
 - **Remote config edit** — atomic read/write of a fixed set of files
   (`snapserver.conf`, `shairport-sync.conf`, …), with an optional
   reload-or-restart of the bound unit on every write.
@@ -198,14 +217,30 @@ zerod systemd status snapserver.service
 ```
 zerod bluetooth scan --timeout-secs 5
 zerod bluetooth connect AA:BB:CC:DD:EE:FF
+zerod bluetooth discoverable on --timeout 60
+zerod bluetooth respond-pairing AA:BB:CC:DD:EE:FF --accept
 
 zerod stream play https://example.com/audio.m3u8 --output cpal
 zerod stream play https://example.com/audio.mpd --output pipe --pipe-path /tmp/audio.pcm
-zerod stream status
+zerod stream spotify start                 # advertise as a Spotify Connect device
+zerod stream spotify stop
+zerod stream status                        # state, source (Hls/Dash/Spotify), output, volume
 zerod stream stop
+
+zerod a2dp enable                          # start bluealsa-aplay + flip discoverable
+zerod a2dp disable
 
 zerod systemd list
 zerod systemd restart snapserver.service
+
+zerod snapcast clients                     # list every snapclient across all groups
+zerod snapcast volume aa:bb:cc:dd:ee:ff 30
+zerod snapcast group-mute g1 true
+zerod snapcast group-stream g1 default
+
+zerod events tail                          # subscribe to every event, one JSON line each
+zerod events tail --filter stream.state    # only stream playback transitions
+zerod events tail --filter 'bt.*'          # all bluetooth events (quote the wildcard)
 
 zerod volume list                          # all ALSA selems on default card
 zerod volume get                           # Master on default card
@@ -214,7 +249,7 @@ zerod volume set 50 --control PCM          # specific control
 zerod volume mute
 zerod volume unmute
 
-zerod stream volume set 80                 # per-stream gain (HLS/DASH session)
+zerod stream volume set 80                 # per-stream gain (HLS/DASH/Spotify session)
 zerod stream volume get
 
 zerod config list
@@ -258,11 +293,13 @@ zerod/
 ├── Dockerfile.arm-unknown-linux-gnueabihf
 └── crates/
     ├── proto/      # tonic_build over .proto files (zerod.v1alpha1)
-    ├── bluetooth/  # bluer wrapper (target_os="linux" gated)
-    ├── stream/     # HLS/DASH player + AudioSink trait + 3 sinks
+    ├── bluetooth/  # bluer wrapper + pairing agent (target_os="linux" gated)
+    ├── stream/     # HLS/DASH + librespot source + AudioSink trait + 3 sinks
     ├── systemd/    # zbus systemd1 client (target_os="linux" gated)
     ├── config/     # ManagedConfig registry, atomic write
     ├── discovery/  # mDNS register + browse over mdns-sd
+    ├── events/     # broadcast event bus shared by every subsystem
+    ├── snapcast/   # JSON-RPC 2.0 client over TCP to snapserver
     └── server/     # tonic services + settings loader + bearer interceptor
 ```
 
