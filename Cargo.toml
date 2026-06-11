@@ -15,6 +15,7 @@ members = [
     "crates/systemd",
     "crates/config",
     "crates/discovery",
+    "crates/events",
     "crates/server",
     "crates/volume",
 ]

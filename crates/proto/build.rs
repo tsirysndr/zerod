@@ -17,6 +17,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 "proto/zerod/v1alpha1/config.proto",
                 "proto/zerod/v1alpha1/system.proto",
                 "proto/zerod/v1alpha1/volume.proto",
+                "proto/zerod/v1alpha1/events.proto",
             ],
             &["proto"],
         )?;

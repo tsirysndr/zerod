@@ -3160,6 +3160,7 @@ dependencies = [
  "futures-core",
  "pin-project-lite",
  "tokio",
+ "tokio-util",
 ]
 
 [[package]]
@@ -4271,6 +4272,7 @@ dependencies = [
  "serde",
  "tokio",
  "tracing",
+ "zerod-events",
 ]
 
 [[package]]
@@ -4294,6 +4296,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "zerod-events"
+version = "0.1.0"
+dependencies = [
+ "once_cell",
+ "tokio",
+]
+
+[[package]]
 name = "zerod-proto"
 version = "0.1.0"
 dependencies = [
@@ -4308,11 +4318,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
+ "futures",
  "gethostname",
  "getrandom 0.2.17",
  "serde",
  "serde_json",
  "tokio",
+ "tokio-stream",
  "toml",
  "tonic",
  "tonic-reflection",
@@ -4320,6 +4332,7 @@ dependencies = [
  "zerod-bluetooth",
  "zerod-config",
  "zerod-discovery",
+ "zerod-events",
  "zerod-proto",
  "zerod-stream",
  "zerod-systemd",
@@ -4344,6 +4357,7 @@ dependencies = [
  "tokio",
  "tracing",
  "url",
+ "zerod-events",
 ]
 
 [[package]]
@@ -4355,6 +4369,7 @@ dependencies = [
  "tokio",
  "tracing",
  "zbus",
+ "zerod-events",
 ]
 
 [[package]]
@@ -4365,6 +4380,7 @@ dependencies = [
  "anyhow",
  "serde",
  "tracing",
+ "zerod-events",
 ]
 
 [[package]]

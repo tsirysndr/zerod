@@ -98,6 +98,12 @@ struct Player {
 impl Player {
     fn set_state(&self, s: PlayerState) {
         self.state.store(s as u8, Ordering::SeqCst);
+        let error = self.last_error.lock().unwrap().clone();
+        zerod_events::publish(zerod_events::Event::StreamStateChanged {
+            state: to_event_state(s),
+            url: self.url.clone(),
+            error,
+        });
     }
 
     fn state(&self) -> PlayerState {
@@ -462,7 +468,20 @@ pub fn status() -> Status {
 pub fn set_volume(percent: u32) {
     let p = percent.min(100);
     GLOBAL_VOLUME.store(p, Ordering::Relaxed);
+    zerod_events::publish(zerod_events::Event::StreamVolumeChanged {
+        volume_percent: p,
+    });
     tracing::info!("stream: set volume to {}%", p);
+}
+
+fn to_event_state(s: PlayerState) -> zerod_events::StreamState {
+    match s {
+        PlayerState::Stopped => zerod_events::StreamState::Stopped,
+        PlayerState::Buffering => zerod_events::StreamState::Buffering,
+        PlayerState::Playing => zerod_events::StreamState::Playing,
+        PlayerState::Paused => zerod_events::StreamState::Paused,
+        PlayerState::Errored => zerod_events::StreamState::Errored,
+    }
 }
 
 pub fn volume() -> u32 {

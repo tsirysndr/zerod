@@ -24,6 +24,16 @@ mod imp {
     use std::time::Duration;
     use tracing::warn;
 
+    fn publish_device(d: &BluetoothDevice) {
+        zerod_events::publish(zerod_events::Event::BluetoothDeviceChanged {
+            address: d.address.clone(),
+            name: d.name.clone(),
+            paired: d.paired,
+            connected: d.connected,
+            trusted: d.trusted,
+        });
+    }
+
     async fn adapter() -> Result<bluer::Adapter> {
         let session = bluer::Session::new().await?;
         let adapter = session.default_adapter().await?;
@@ -89,6 +99,9 @@ mod imp {
         if !device.is_trusted().await? {
             device.set_trusted(true).await?;
         }
+        if let Ok(info) = device_info(&adapter, addr).await {
+            publish_device(&info);
+        }
         Ok(())
     }
 
@@ -103,6 +116,9 @@ mod imp {
             device.set_trusted(true).await?;
         }
         device.connect().await?;
+        if let Ok(info) = device_info(&adapter, addr).await {
+            publish_device(&info);
+        }
         Ok(())
     }
 
@@ -110,6 +126,9 @@ mod imp {
         let adapter = adapter().await?;
         let addr = Address::from_str(address)?;
         adapter.device(addr)?.disconnect().await?;
+        if let Ok(info) = device_info(&adapter, addr).await {
+            publish_device(&info);
+        }
         Ok(())
     }
 
@@ -117,6 +136,13 @@ mod imp {
         let adapter = adapter().await?;
         let addr = Address::from_str(address)?;
         adapter.remove_device(addr).await?;
+        zerod_events::publish(zerod_events::Event::BluetoothDeviceChanged {
+            address: address.to_string(),
+            name: String::new(),
+            paired: false,
+            connected: false,
+            trusted: false,
+        });
         Ok(())
     }
 }

@@ -103,8 +103,22 @@ enum Command {
     /// Manage zerod's own systemd --user unit (Linux only).
     #[command(subcommand)]
     Service(ServiceCmd),
+    /// Subscribe to server-side events (server-streaming).
+    #[command(subcommand)]
+    Events(EventsCmd),
     /// Browse mDNS for zerod servers on the LAN.
     Discover,
+}
+
+#[derive(Subcommand)]
+enum EventsCmd {
+    /// Print events as JSON, one per line, until interrupted.
+    Tail {
+        /// Kind filter(s). Empty → every event. Exact match (`stream.state`)
+        /// or `.*` suffix wildcard (`bt.*`). Repeat the flag for OR.
+        #[arg(long)]
+        filter: Vec<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -293,6 +307,7 @@ async fn main() -> Result<()> {
         Some(Command::Config(cmd)) => run_config(&endpoint.unwrap(), bearer_token, cmd).await,
         Some(Command::System(cmd)) => run_system(&endpoint.unwrap(), bearer_token, cmd).await,
         Some(Command::Volume(cmd)) => run_volume(&endpoint.unwrap(), bearer_token, cmd).await,
+        Some(Command::Events(cmd)) => run_events(&endpoint.unwrap(), bearer_token, cmd).await,
     }
 }
 
@@ -718,6 +733,99 @@ async fn run_config(ep: &Endpoint, token: Option<String>, cmd: ConfigCmd) -> Res
         }
     }
     Ok(())
+}
+
+// --- events ----------------------------------------------------------------
+
+async fn run_events(ep: &Endpoint, token: Option<String>, cmd: EventsCmd) -> Result<()> {
+    let ch = channel(ep).await?;
+    let mut client = pb::events_service_client::EventsServiceClient::new(ch);
+    match cmd {
+        EventsCmd::Tail { filter } => {
+            let mut stream = client
+                .subscribe(attach_token(
+                    Request::new(pb::SubscribeRequest { kinds: filter }),
+                    &token,
+                ))
+                .await?
+                .into_inner();
+            while let Some(ev) = stream.message().await? {
+                println!("{}", serde_json::to_string(&event_to_json(&ev))?);
+            }
+        }
+    }
+    Ok(())
+}
+
+fn event_to_json(ev: &pb::Event) -> serde_json::Value {
+    use serde_json::json;
+    let (kind, payload) = match &ev.payload {
+        Some(pb::event::Payload::StreamState(p)) => {
+            let state = pb::PlayerState::try_from(p.state)
+                .unwrap_or(pb::PlayerState::Unspecified);
+            (
+                "stream.state",
+                json!({"state": format!("{state:?}"), "url": p.url, "error": p.error}),
+            )
+        }
+        Some(pb::event::Payload::StreamVolume(p)) => (
+            "stream.volume",
+            json!({"volume_percent": p.volume_percent}),
+        ),
+        Some(pb::event::Payload::BtDevice(p)) => (
+            "bt.device",
+            json!({
+                "address": p.address, "name": p.name,
+                "paired": p.paired, "connected": p.connected, "trusted": p.trusted,
+            }),
+        ),
+        Some(pb::event::Payload::BtPairingRequest(p)) => (
+            "bt.pairing",
+            json!({"address": p.address, "passkey": p.passkey}),
+        ),
+        Some(pb::event::Payload::BtA2dpConnected(p)) => (
+            "bt.a2dp.connected",
+            json!({"address": p.address, "name": p.name}),
+        ),
+        Some(pb::event::Payload::BtA2dpDisconnected(p)) => (
+            "bt.a2dp.disconnected",
+            json!({"address": p.address, "name": p.name}),
+        ),
+        Some(pb::event::Payload::SystemdUnit(p)) => (
+            "systemd.unit",
+            json!({
+                "name": p.name, "active_state": p.active_state,
+                "sub_state": p.sub_state, "enabled": p.enabled,
+            }),
+        ),
+        Some(pb::event::Payload::Volume(p)) => (
+            "volume",
+            json!({
+                "card": p.card, "control": p.control,
+                "volume_percent": p.volume_percent, "muted": p.muted,
+            }),
+        ),
+        Some(pb::event::Payload::SnapClient(p)) => (
+            "snap.client",
+            json!({
+                "client_id": p.client_id, "name": p.name,
+                "volume_percent": p.volume_percent, "muted": p.muted,
+            }),
+        ),
+        Some(pb::event::Payload::LibrespotState(p)) => (
+            "librespot.state",
+            json!({"state": p.state, "track": p.track}),
+        ),
+        Some(pb::event::Payload::Lagged(p)) => {
+            ("lagged", json!({"dropped": p.dropped}))
+        }
+        None => ("unknown", json!({})),
+    };
+    json!({
+        "timestamp_ms": ev.timestamp_ms,
+        "kind": kind,
+        "payload": payload,
+    })
 }
 
 // --- system ----------------------------------------------------------------

@@ -2,6 +2,7 @@
 
 mod bluetooth;
 mod config;
+mod events;
 mod settings;
 mod stream;
 mod system;
@@ -16,9 +17,9 @@ use std::sync::Arc;
 use tonic::transport::Server;
 use zerod_proto::v1alpha1::{
     bluetooth_service_server::BluetoothServiceServer,
-    config_service_server::ConfigServiceServer, stream_service_server::StreamServiceServer,
-    system_service_server::SystemServiceServer, systemd_service_server::SystemdServiceServer,
-    volume_service_server::VolumeServiceServer,
+    config_service_server::ConfigServiceServer, events_service_server::EventsServiceServer,
+    stream_service_server::StreamServiceServer, system_service_server::SystemServiceServer,
+    systemd_service_server::SystemdServiceServer, volume_service_server::VolumeServiceServer,
 };
 
 pub async fn serve(settings: Settings) -> Result<()> {
@@ -77,6 +78,10 @@ pub async fn serve(settings: Settings) -> Result<()> {
         ))
         .add_service(VolumeServiceServer::with_interceptor(
             volume::VolumeSvc::default(),
+            interceptor.clone(),
+        ))
+        .add_service(EventsServiceServer::with_interceptor(
+            events::EventsSvc::default(),
             interceptor,
         ))
         .serve(addr)

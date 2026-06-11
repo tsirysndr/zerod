@@ -63,6 +63,21 @@ mod imp {
     use super::{ActiveState, UnitAllowlist, UnitStatus};
     use anyhow::{Context, Result};
 
+    fn publish_unit(u: &UnitStatus) {
+        zerod_events::publish(zerod_events::Event::SystemdUnitState {
+            name: u.name.clone(),
+            active_state: u.active_state.clone(),
+            sub_state: u.sub_state.clone(),
+            enabled: u.enabled,
+        });
+    }
+
+    async fn publish_after(allow: &UnitAllowlist, name: &str) {
+        if let Ok(s) = status(allow, name).await {
+            publish_unit(&s);
+        }
+    }
+
     #[zbus::proxy(
         interface = "org.freedesktop.systemd1.Manager",
         default_service = "org.freedesktop.systemd1",
@@ -170,24 +185,28 @@ mod imp {
         allow.check(name)?;
         let (_c, mgr) = connect().await?;
         mgr.start_unit(name, "replace").await.with_context(|| format!("start {name}"))?;
+        publish_after(allow, name).await;
         Ok(())
     }
     pub async fn stop(allow: &UnitAllowlist, name: &str) -> Result<()> {
         allow.check(name)?;
         let (_c, mgr) = connect().await?;
         mgr.stop_unit(name, "replace").await.with_context(|| format!("stop {name}"))?;
+        publish_after(allow, name).await;
         Ok(())
     }
     pub async fn restart(allow: &UnitAllowlist, name: &str) -> Result<()> {
         allow.check(name)?;
         let (_c, mgr) = connect().await?;
         mgr.restart_unit(name, "replace").await.with_context(|| format!("restart {name}"))?;
+        publish_after(allow, name).await;
         Ok(())
     }
     pub async fn reload(allow: &UnitAllowlist, name: &str) -> Result<()> {
         allow.check(name)?;
         let (_c, mgr) = connect().await?;
         mgr.reload_unit(name, "replace").await.with_context(|| format!("reload {name}"))?;
+        publish_after(allow, name).await;
         Ok(())
     }
     pub async fn enable(allow: &UnitAllowlist, name: &str) -> Result<()> {
@@ -198,6 +217,7 @@ mod imp {
             .with_context(|| format!("enable {name}"))?;
         // EnableUnitFiles doesn't apply changes until daemon-reload.
         mgr.reload().await.ok();
+        publish_after(allow, name).await;
         Ok(())
     }
     pub async fn disable(allow: &UnitAllowlist, name: &str) -> Result<()> {
@@ -207,6 +227,7 @@ mod imp {
             .await
             .with_context(|| format!("disable {name}"))?;
         mgr.reload().await.ok();
+        publish_after(allow, name).await;
         Ok(())
     }
 

@@ -149,6 +149,7 @@ mod imp {
         selem
             .set_playback_volume_all(target)
             .with_context(|| format!("set_playback_volume_all({target})"))?;
+        publish_volume(sel);
         Ok(())
     }
 
@@ -164,7 +165,19 @@ mod imp {
         selem
             .set_playback_switch_all(if muted { 0 } else { 1 })
             .with_context(|| format!("set_playback_switch_all(muted={muted})"))?;
+        publish_volume(sel);
         Ok(())
+    }
+
+    fn publish_volume(sel: &Selector) {
+        if let Ok(st) = get(sel) {
+            zerod_events::publish(zerod_events::Event::VolumeChanged {
+                card: sel.card.clone(),
+                control: sel.control.clone(),
+                volume_percent: st.volume_percent,
+                muted: st.muted,
+            });
+        }
     }
 }
 
