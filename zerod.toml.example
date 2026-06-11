@@ -10,6 +10,12 @@ bind = "0.0.0.0:50151"
 # set this explicitly when bind is non-loopback.
 bearer_token = ""
 
+[mdns]
+# Advertise this daemon on the LAN as `_zerod._tcp.local.` so clients can
+# discover it without --host. Empty `name` uses the machine hostname.
+enabled = true
+name = ""
+
 [systemd]
 # Only units listed here can be controlled via the SystemdService API.
 # Acts as an allowlist so the gRPC server can't be turned into a generic

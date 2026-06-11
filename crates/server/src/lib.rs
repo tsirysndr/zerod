@@ -8,7 +8,7 @@ mod system;
 mod systemd;
 mod volume;
 
-pub use settings::{load_settings, Settings};
+pub use settings::{load_settings, MdnsSettings, Settings};
 
 use anyhow::{Context, Result};
 use std::net::SocketAddr;
@@ -31,6 +31,8 @@ pub async fn serve(settings: Settings) -> Result<()> {
     let allow = Arc::new(settings.systemd_allowlist());
     let registry = Arc::new(settings.config_registry());
     let bearer = resolve_bearer_token(&settings.server.bearer_token)?;
+
+    let _mdns = maybe_advertise(&settings.mdns, addr.port());
 
     let reflection = tonic_reflection::server::Builder::configure()
         .register_encoded_file_descriptor_set(zerod_proto::FILE_DESCRIPTOR_SET)
@@ -125,6 +127,41 @@ fn resolve_bearer_token(from_settings: &str) -> Result<String> {
     );
     tracing::warn!("auth: BEARER TOKEN = {}", token);
     Ok(token)
+}
+
+/// Returns the live [`Advertisement`] so the caller keeps it alive for the
+/// daemon's lifetime — dropping it tears down the mDNS registration.
+fn maybe_advertise(mdns: &MdnsSettings, port: u16) -> Option<zerod_discovery::Advertisement> {
+    if !mdns.enabled {
+        tracing::info!("mDNS: disabled in zerod.toml");
+        return None;
+    }
+    let name = if mdns.name.is_empty() {
+        hostname_fallback()
+    } else {
+        mdns.name.clone()
+    };
+    let version = env!("CARGO_PKG_VERSION").to_string();
+    let txt = vec![("version".to_string(), version)];
+    match zerod_discovery::advertise(&name, port, &txt) {
+        Ok(adv) => Some(adv),
+        Err(e) => {
+            tracing::warn!("mDNS: advertise failed: {e:#}");
+            None
+        }
+    }
+}
+
+fn hostname_fallback() -> String {
+    let raw = gethostname::gethostname().to_string_lossy().into_owned();
+    // Some systems return "host.local" — strip a single trailing .local to
+    // keep the mDNS instance name clean.
+    let trimmed = raw.strip_suffix(".local").unwrap_or(&raw);
+    if trimmed.is_empty() {
+        "zerod".to_string()
+    } else {
+        trimmed.to_string()
+    }
 }
 
 fn random_hex_token() -> Result<String> {

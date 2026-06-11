@@ -2,15 +2,17 @@
 //!
 //! `zerod` (no args)         → run as a gRPC server (reads zerod.toml).
 //! `zerod serve …`           → explicit server invocation.
-//! `zerod bluetooth scan`    → client subcommands. Defaults host=localhost
-//! `zerod stream play …`       port=50151; override with --host / --port and
-//! `zerod systemd start …`     optional --bearer-token.
-//! `zerod config get …`
+//! `zerod bluetooth scan`    → client subcommands. With no --host, the
+//! `zerod stream play …`       client browses mDNS (`_zerod._tcp.local.`)
+//! `zerod systemd start …`     and connects to the only responder. Use
+//! `zerod config get …`        --name to disambiguate when several reply,
+//! `zerod discover`            or --host to bypass discovery entirely.
 
-use anyhow::{Context, Result};
+use anyhow::{anyhow, Context, Result};
 use clap::builder::styling::{Color, RgbColor, Style, Styles};
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
+use std::time::Duration;
 use tonic::metadata::MetadataValue;
 use tonic::transport::Channel;
 use tonic::Request;
@@ -49,17 +51,28 @@ struct Cli {
     #[arg(long, global = true)]
     config: Option<PathBuf>,
 
-    /// Client mode: target server host. Ignored for `serve`.
-    #[arg(long, global = true, env = "ZEROD_HOST", default_value = "localhost")]
-    host: String,
+    /// Client mode: target server host. When omitted, discovers a server via
+    /// mDNS on the LAN. Ignored for `serve`.
+    #[arg(long, global = true, env = "ZEROD_HOST")]
+    host: Option<String>,
 
-    /// Client mode: target server port. Ignored for `serve`.
+    /// Client mode: target server port. Ignored for `serve` and when --host
+    /// is omitted (the discovered port is used).
     #[arg(long, global = true, env = "ZEROD_PORT", default_value_t = 50151)]
     port: u16,
 
     /// Client mode: bearer token to send.
     #[arg(long, global = true, env = "ZEROD_BEARER_TOKEN")]
     bearer_token: Option<String>,
+
+    /// Client mode: when discovering via mDNS, pick the responder whose
+    /// instance name matches this exactly. Has no effect when --host is set.
+    #[arg(long, global = true, env = "ZEROD_NAME")]
+    name: Option<String>,
+
+    /// Client mode: how long to browse mDNS before giving up (milliseconds).
+    #[arg(long, global = true, env = "ZEROD_DISCOVER_TIMEOUT_MS", default_value_t = 1500)]
+    discover_timeout_ms: u64,
 
     #[command(subcommand)]
     command: Option<Command>,
@@ -90,6 +103,8 @@ enum Command {
     /// Manage zerod's own systemd --user unit (Linux only).
     #[command(subcommand)]
     Service(ServiceCmd),
+    /// Browse mDNS for zerod servers on the LAN.
+    Discover,
 }
 
 #[derive(Subcommand)]
@@ -249,16 +264,99 @@ async fn main() -> Result<()> {
         )
         .init();
     let cli = Cli::parse();
-    match cli.command {
-        None | Some(Command::Serve) => run_server(cli.config.as_deref()).await,
-        Some(Command::Bluetooth(cmd)) => run_bluetooth(&cli.host, cli.port, cli.bearer_token, cmd).await,
-        Some(Command::Stream(cmd)) => run_stream(&cli.host, cli.port, cli.bearer_token, cmd).await,
-        Some(Command::Systemd(cmd)) => run_systemd(&cli.host, cli.port, cli.bearer_token, cmd).await,
-        Some(Command::Config(cmd)) => run_config(&cli.host, cli.port, cli.bearer_token, cmd).await,
-        Some(Command::System(cmd)) => run_system(&cli.host, cli.port, cli.bearer_token, cmd).await,
-        Some(Command::Volume(cmd)) => run_volume(&cli.host, cli.port, cli.bearer_token, cmd).await,
+    let Cli {
+        config,
+        host,
+        port,
+        bearer_token,
+        name,
+        discover_timeout_ms,
+        command,
+    } = cli;
+    let discover_timeout = Duration::from_millis(discover_timeout_ms);
+    let needs_endpoint = !matches!(
+        command,
+        None | Some(Command::Serve) | Some(Command::Service(_)) | Some(Command::Discover)
+    );
+    let endpoint = if needs_endpoint {
+        Some(resolve_endpoint(host.as_deref(), port, name.as_deref(), discover_timeout)?)
+    } else {
+        None
+    };
+    match command {
+        None | Some(Command::Serve) => run_server(config.as_deref()).await,
         Some(Command::Service(cmd)) => run_service(cmd),
+        Some(Command::Discover) => run_discover(discover_timeout),
+        Some(Command::Bluetooth(cmd)) => run_bluetooth(&endpoint.unwrap(), bearer_token, cmd).await,
+        Some(Command::Stream(cmd)) => run_stream(&endpoint.unwrap(), bearer_token, cmd).await,
+        Some(Command::Systemd(cmd)) => run_systemd(&endpoint.unwrap(), bearer_token, cmd).await,
+        Some(Command::Config(cmd)) => run_config(&endpoint.unwrap(), bearer_token, cmd).await,
+        Some(Command::System(cmd)) => run_system(&endpoint.unwrap(), bearer_token, cmd).await,
+        Some(Command::Volume(cmd)) => run_volume(&endpoint.unwrap(), bearer_token, cmd).await,
     }
+}
+
+struct Endpoint {
+    host: String,
+    port: u16,
+}
+
+fn resolve_endpoint(
+    host: Option<&str>,
+    port: u16,
+    name: Option<&str>,
+    timeout: Duration,
+) -> Result<Endpoint> {
+    if let Some(h) = host.filter(|s| !s.is_empty()) {
+        return Ok(Endpoint { host: h.to_string(), port });
+    }
+    let mut found = zerod_discovery::discover(timeout).context("mDNS browse")?;
+    if let Some(n) = name.filter(|s| !s.is_empty()) {
+        found.retain(|d| d.name == n);
+    }
+    match found.len() {
+        0 => Err(anyhow!(
+            "no zerod server found on the LAN within {}ms. \
+             Pass --host explicitly, or check that the daemon is running with [mdns] enabled.",
+            timeout.as_millis(),
+        )),
+        1 => {
+            let d = found.remove(0);
+            let h = d.best_host().ok_or_else(|| {
+                anyhow!("discovered server {:?} has no usable IPv4 address", d.name)
+            })?;
+            tracing::info!("mDNS: using {} ({}:{})", d.name, h, d.port);
+            Ok(Endpoint { host: h, port: d.port })
+        }
+        _ => {
+            let mut msg = String::from(
+                "multiple zerod servers responded. Re-run with --name <name> to pick one:\n",
+            );
+            for d in &found {
+                let h = d.best_host().unwrap_or_else(|| "?".to_string());
+                msg.push_str(&format!("  {:30}  {}:{}\n", d.name, h, d.port));
+            }
+            Err(anyhow!(msg))
+        }
+    }
+}
+
+fn run_discover(timeout: Duration) -> Result<()> {
+    let found = zerod_discovery::discover(timeout).context("mDNS browse")?;
+    if found.is_empty() {
+        println!("no zerod servers found on the LAN within {}ms", timeout.as_millis());
+        return Ok(());
+    }
+    for d in &found {
+        let host = d.best_host().unwrap_or_else(|| "?".to_string());
+        let version = d
+            .properties
+            .get("version")
+            .map(String::as_str)
+            .unwrap_or("?");
+        println!("{:30}  {}:{}  version={}", d.name, host, d.port, version);
+    }
+    Ok(())
 }
 
 fn run_service(cmd: ServiceCmd) -> Result<()> {
@@ -281,9 +379,12 @@ fn run_service(cmd: ServiceCmd) -> Result<()> {
             println!("So the service survives logout / starts on boot:");
             println!("  sudo loginctl enable-linger \"$USER\"");
             println!();
-            println!("Use the token from any client:");
+            println!("Use the token from any client (auto-discovers via mDNS):");
             println!("  export ZEROD_BEARER_TOKEN={}", installed.token);
-            println!("  zerod --host <pi> system health");
+            println!("  zerod system health");
+            println!();
+            println!("Or list every responder on the LAN:");
+            println!("  zerod discover");
             Ok(())
         }
         ServiceCmd::Uninstall => match service::uninstall()? {
@@ -314,8 +415,8 @@ async fn run_server(config: Option<&std::path::Path>) -> Result<()> {
 
 // --- client helpers ---------------------------------------------------------
 
-async fn channel(host: &str, port: u16) -> Result<Channel> {
-    let url = format!("http://{host}:{port}");
+async fn channel(ep: &Endpoint) -> Result<Channel> {
+    let url = format!("http://{}:{}", ep.host, ep.port);
     Channel::from_shared(url.clone())
         .with_context(|| format!("invalid endpoint {url}"))?
         .connect()
@@ -338,8 +439,8 @@ fn print_json(v: &serde_json::Value) -> Result<()> {
 
 // --- bluetooth -------------------------------------------------------------
 
-async fn run_bluetooth(host: &str, port: u16, token: Option<String>, cmd: BluetoothCmd) -> Result<()> {
-    let ch = channel(host, port).await?;
+async fn run_bluetooth(ep: &Endpoint, token: Option<String>, cmd: BluetoothCmd) -> Result<()> {
+    let ch = channel(ep).await?;
     let mut client = pb::bluetooth_service_client::BluetoothServiceClient::new(ch);
     match cmd {
         BluetoothCmd::Scan { timeout_secs } => {
@@ -388,8 +489,8 @@ async fn run_bluetooth(host: &str, port: u16, token: Option<String>, cmd: Blueto
 
 // --- stream ----------------------------------------------------------------
 
-async fn run_stream(host: &str, port: u16, token: Option<String>, cmd: StreamCmd) -> Result<()> {
-    let ch = channel(host, port).await?;
+async fn run_stream(ep: &Endpoint, token: Option<String>, cmd: StreamCmd) -> Result<()> {
+    let ch = channel(ep).await?;
     let mut client = pb::stream_service_client::StreamServiceClient::new(ch);
     match cmd {
         StreamCmd::Play { url, output, pipe_path } => {
@@ -457,8 +558,8 @@ async fn run_stream(host: &str, port: u16, token: Option<String>, cmd: StreamCmd
     Ok(())
 }
 
-async fn run_volume(host: &str, port: u16, token: Option<String>, cmd: VolumeCmd) -> Result<()> {
-    let ch = channel(host, port).await?;
+async fn run_volume(ep: &Endpoint, token: Option<String>, cmd: VolumeCmd) -> Result<()> {
+    let ch = channel(ep).await?;
     let mut client = pb::volume_service_client::VolumeServiceClient::new(ch);
     let mk = |card: Option<String>, control: Option<String>, index: u32| pb::MixerSelector {
         card: card.unwrap_or_default(),
@@ -532,8 +633,8 @@ async fn run_volume(host: &str, port: u16, token: Option<String>, cmd: VolumeCmd
 
 // --- systemd ---------------------------------------------------------------
 
-async fn run_systemd(host: &str, port: u16, token: Option<String>, cmd: SystemdCmd) -> Result<()> {
-    let ch = channel(host, port).await?;
+async fn run_systemd(ep: &Endpoint, token: Option<String>, cmd: SystemdCmd) -> Result<()> {
+    let ch = channel(ep).await?;
     let mut client = pb::systemd_service_client::SystemdServiceClient::new(ch);
     match cmd {
         SystemdCmd::List => {
@@ -574,8 +675,8 @@ async fn run_systemd(host: &str, port: u16, token: Option<String>, cmd: SystemdC
 
 // --- config ----------------------------------------------------------------
 
-async fn run_config(host: &str, port: u16, token: Option<String>, cmd: ConfigCmd) -> Result<()> {
-    let ch = channel(host, port).await?;
+async fn run_config(ep: &Endpoint, token: Option<String>, cmd: ConfigCmd) -> Result<()> {
+    let ch = channel(ep).await?;
     let mut client = pb::config_service_client::ConfigServiceClient::new(ch);
     match cmd {
         ConfigCmd::List => {
@@ -621,8 +722,8 @@ async fn run_config(host: &str, port: u16, token: Option<String>, cmd: ConfigCmd
 
 // --- system ----------------------------------------------------------------
 
-async fn run_system(host: &str, port: u16, token: Option<String>, cmd: SystemCmd) -> Result<()> {
-    let ch = channel(host, port).await?;
+async fn run_system(ep: &Endpoint, token: Option<String>, cmd: SystemCmd) -> Result<()> {
+    let ch = channel(ep).await?;
     let mut client = pb::system_service_client::SystemServiceClient::new(ch);
     match cmd {
         SystemCmd::Version => {

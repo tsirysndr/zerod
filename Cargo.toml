@@ -14,6 +14,7 @@ members = [
     "crates/stream",
     "crates/systemd",
     "crates/config",
+    "crates/discovery",
     "crates/server",
     "crates/volume",
 ]
@@ -38,6 +39,7 @@ tonic-reflection = "0.12"
 url = "2"
 
 [dependencies]
+zerod-discovery = { path = "crates/discovery" }
 zerod-proto = { path = "crates/proto" }
 zerod-server = { path = "crates/server" }
 anyhow = { workspace = true }

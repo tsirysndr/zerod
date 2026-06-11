@@ -7,6 +7,7 @@ edition = "2021"
 anyhow = { workspace = true }
 async-trait = { workspace = true }
 getrandom = "0.2"
+gethostname = "0.5"
 serde = { workspace = true }
 serde_json = { workspace = true }
 toml = "0.8"
@@ -16,6 +17,7 @@ tonic-reflection = { workspace = true }
 tracing = { workspace = true }
 zerod-bluetooth = { path = "../bluetooth" }
 zerod-config = { path = "../config" }
+zerod-discovery = { path = "../discovery" }
 zerod-proto = { path = "../proto" }
 zerod-stream = { path = "../stream" }
 zerod-systemd = { path = "../systemd" }

@@ -44,6 +44,10 @@ Early. Pre-1.0, breaking changes expected.
 - **Auth** — bearer token. Three sources, in order: `zerod.toml`,
   `ZEROD_BEARER_TOKEN` env var, or a 32-byte random one generated and logged
   at startup.
+- **mDNS / zeroconf discovery** — the server advertises itself as
+  `_zerod._tcp.local.`, so clients on the same LAN can find it without
+  `--host`. `zerod discover` lists every responder. Pure-Rust, no Avahi
+  or Bonjour dependency.
 - **Reflection** — `tonic-reflection` is wired up, so `grpcurl
   -plaintext localhost:50151 list` works out of the box.
 
@@ -158,20 +162,37 @@ is printed once at startup if nothing is configured.
 
 ### Client
 
-Client subcommands default to `--host localhost --port 50151`. Each global
-flag also reads from an env var so you can pin the target once per shell
-session and skip the flags entirely:
+With no `--host`, the client browses mDNS (`_zerod._tcp.local.`) for ~1.5s
+and connects to the only responder. If multiple servers reply, you get a
+listing and the command exits non-zero — pin one with `--name` (the server
+hostname, or whatever you set as `[mdns].name` in `zerod.toml`). Pass
+`--host` (or `ZEROD_HOST`) to bypass discovery entirely.
 
-| Flag             | Env var              |
-| ---------------- | -------------------- |
-| `--host`         | `ZEROD_HOST`         |
-| `--port`         | `ZEROD_PORT`         |
-| `--bearer-token` | `ZEROD_BEARER_TOKEN` |
+Each global flag also reads from an env var so you can pin the target once
+per shell session and skip the flags entirely:
+
+| Flag                     | Env var                     |
+| ------------------------ | --------------------------- |
+| `--host`                 | `ZEROD_HOST`                |
+| `--port`                 | `ZEROD_PORT`                |
+| `--bearer-token`         | `ZEROD_BEARER_TOKEN`        |
+| `--name`                 | `ZEROD_NAME`                |
+| `--discover-timeout-ms`  | `ZEROD_DISCOVER_TIMEOUT_MS` |
 
 ```
-export ZEROD_HOST=pi.lan
+# No host needed — the daemon is found via mDNS.
 export ZEROD_BEARER_TOKEN="$(cat ~/.zerod-token)"
-zerod systemd status snapserver.service     # uses pi.lan + token from env
+zerod systemd status snapserver.service
+
+# List every zerod on the LAN.
+zerod discover
+
+# Two daemons on the LAN? Pick one by name (matches [mdns].name).
+zerod --name living-room-pi system health
+
+# Skip mDNS entirely.
+export ZEROD_HOST=pi.lan
+zerod systemd status snapserver.service
 ```
 
 ```
@@ -200,7 +221,7 @@ zerod config list
 zerod config get snapserver
 zerod config put snapserver ./snapserver.conf --action restart
 
-zerod --host pi.lan --bearer-token "$(cat ~/.zerod-token)" systemd status snapserver.service
+zerod --bearer-token "$(cat ~/.zerod-token)" systemd status snapserver.service
 ```
 
 ### gRPC directly
@@ -241,6 +262,7 @@ zerod/
     ├── stream/     # HLS/DASH player + AudioSink trait + 3 sinks
     ├── systemd/    # zbus systemd1 client (target_os="linux" gated)
     ├── config/     # ManagedConfig registry, atomic write
+    ├── discovery/  # mDNS register + browse over mdns-sd
     └── server/     # tonic services + settings loader + bearer interceptor
 ```
 

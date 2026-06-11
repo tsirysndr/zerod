@@ -1,0 +1,9 @@
+[package]
+name = "zerod-discovery"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = { workspace = true }
+mdns-sd = "0.20"
+tracing = { workspace = true }

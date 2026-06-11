@@ -26,6 +26,8 @@ pub struct Settings {
     #[serde(default)]
     pub systemd: SystemdSettings,
     #[serde(default)]
+    pub mdns: MdnsSettings,
+    #[serde(default)]
     pub configs: Vec<ManagedConfig>,
 }
 
@@ -41,6 +43,26 @@ pub struct ServerSettings {
 pub struct SystemdSettings {
     #[serde(default)]
     pub units: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct MdnsSettings {
+    /// Advertise the daemon on the LAN via mDNS. Default: true.
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    /// Instance name to advertise. Empty → derive from the machine hostname.
+    #[serde(default)]
+    pub name: String,
+}
+
+impl Default for MdnsSettings {
+    fn default() -> Self {
+        Self { enabled: true, name: String::new() }
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn default_bind() -> String {
@@ -64,6 +86,7 @@ impl Default for Settings {
         Self {
             server: ServerSettings::default(),
             systemd: SystemdSettings::default(),
+            mdns: MdnsSettings::default(),
             configs: Vec::new(),
         }
     }
