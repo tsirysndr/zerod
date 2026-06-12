@@ -438,7 +438,12 @@ async fn run_player_inner(player: &Arc<Player>) -> Result<()> {
                 .cloned()
                 .collect()
         };
-        fetcher::prefetch(client.clone(), cache.clone(), upcoming).await;
+        // Fire-and-forget: don't make the playback loop wait for the next
+        // 3 segments to land before moving on. Cache miss in the loop above
+        // still falls back to a synchronous fetch, so correctness is
+        // preserved — this just removes the per-segment HTTP latency from
+        // the gap between writes.
+        tokio::spawn(fetcher::prefetch(client.clone(), cache.clone(), upcoming));
 
         next_play_seq += 1;
     }

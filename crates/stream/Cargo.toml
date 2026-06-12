@@ -27,3 +27,4 @@ alsa = "0.9"
 
 [target.'cfg(not(target_os = "linux"))'.dependencies]
 cpal = "0.15"
+rtrb = "0.3"

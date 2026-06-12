@@ -1,69 +1,183 @@
-//! Standalone cpal sink — ring-buffered, lock-free-ish writer-side.
+//! Standalone cpal sink — lock-free SPSC ring + linear-interp resampler.
 //!
-//! The player thread calls `write(samples)` which pushes interleaved S16LE
-//! frames into a bounded ring. A cpal output stream drains the ring on its
-//! audio callback, performing i16→f32 conversion and linear-interpolation
-//! resample when the device's sample rate differs from the source rate.
+//! Writer (player thread) pushes interleaved S16LE samples into an rtrb
+//! ring via `AudioSink::write`. The cpal output callback owns the consumer
+//! half and does, per buffer:
+//!   1. Channel remap (mono ↔ stereo ↔ N) to the device layout.
+//!   2. Linear interpolation between adjacent source frames when the source
+//!      rate differs from the device rate — the common case is librespot
+//!      44.1k → macOS default 48k, where zero-order hold produces audible
+//!      aliasing.
+//!   3. Conversion to the device's native sample format.
+//! No locks, allocations, or syscalls on the audio thread.
 
 use anyhow::{anyhow, Context, Result};
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
-use std::collections::VecDeque;
+use rtrb::{Consumer, Producer, RingBuffer};
 use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 
 use crate::sink::{AudioSink, PcmFormat};
 
-const RING_CAPACITY_BYTES: usize = 512 * 1024;
+const RING_CAPACITY_SAMPLES: usize = 512 * 1024;
+const MAX_CHANNELS: usize = 8;
 
-struct Ring {
-    /// Interleaved S16LE bytes — easiest to drain regardless of source channel count.
-    buf: VecDeque<u8>,
-    closed: bool,
-}
+// cpal::Stream is !Send on macOS — the audio callback runs on a CoreAudio
+// thread outside Rust's scheduler. We never move it between threads after
+// creation; stream replacement happens under a Mutex on the same control
+// thread.
+struct StreamHolder(cpal::Stream);
+unsafe impl Send for StreamHolder {}
+unsafe impl Sync for StreamHolder {}
 
 pub struct CpalSink {
     device_name: Option<String>,
-    ring: Mutex<Ring>,
-    notify: Condvar,
+    producer: Mutex<Option<Producer<i16>>>,
+    stream: Mutex<Option<StreamHolder>>,
     src_rate: AtomicU32,
     src_channels: AtomicU32,
-    stream: Mutex<Option<StreamHolder>>,
     out_rate: AtomicU32,
     out_channels: AtomicU32,
 }
 
-// cpal::Stream is !Send on macOS — the audio callback runs on a CoreAudio thread
-// outside Rust's scheduler. We never move it between threads after creation;
-// stream replacement happens under a Mutex on the same control thread.
-struct StreamHolder(cpal::Stream);
-unsafe impl Send for StreamHolder {}
-unsafe impl Sync for StreamHolder {}
+struct Resampler {
+    prev: [i16; MAX_CHANNELS],
+    next: [i16; MAX_CHANNELS],
+    frac: f32,
+    primed: bool,
+}
+
+impl Resampler {
+    fn new() -> Self {
+        Self {
+            prev: [0; MAX_CHANNELS],
+            next: [0; MAX_CHANNELS],
+            frac: 0.0,
+            primed: false,
+        }
+    }
+
+    #[inline]
+    fn pop_frame(consumer: &mut Consumer<i16>, src_ch: usize, dst: &mut [i16; MAX_CHANNELS]) {
+        for slot in dst.iter_mut().take(src_ch) {
+            if let Ok(s) = consumer.pop() {
+                *slot = s;
+            }
+        }
+    }
+
+    fn fill<F: FnMut(i16)>(
+        &mut self,
+        consumer: &mut Consumer<i16>,
+        src_rate: u32,
+        src_ch: usize,
+        out_ch: usize,
+        ratio: f32,
+        frames: usize,
+        mut emit: F,
+    ) {
+        // Pre-buffer ~1.5s of source frames before unleashing the resampler.
+        // HLS playback has a producer-side gap between segments (decode +
+        // occasional network fetch) that can spike past a smaller buffer
+        // under network jitter, causing random clicks. 1.5s is comfortably
+        // above the worst case while staying well under ring capacity.
+        if !self.primed {
+            let prebuf_frames = (src_rate as usize * 3 / 2).max(2);
+            let need = (prebuf_frames * src_ch).min(RING_CAPACITY_SAMPLES / 2);
+            if consumer.slots() < need {
+                for _ in 0..frames * out_ch {
+                    emit(0);
+                }
+                return;
+            }
+            Self::pop_frame(consumer, src_ch, &mut self.prev);
+            Self::pop_frame(consumer, src_ch, &mut self.next);
+            self.frac = 0.0;
+            self.primed = true;
+        }
+
+        for frame_idx in 0..frames {
+            // Advance source frames as needed.
+            while self.frac >= 1.0 {
+                if consumer.slots() < src_ch {
+                    // Underrun mid-buffer: fill the remaining output with
+                    // silence inline (a clean fade) and re-prime next
+                    // callback so we don't resume from a near-empty ring.
+                    for _ in frame_idx..frames {
+                        for _ in 0..out_ch {
+                            emit(0);
+                        }
+                    }
+                    self.primed = false;
+                    self.frac = 0.0;
+                    return;
+                }
+                self.prev = self.next;
+                Self::pop_frame(consumer, src_ch, &mut self.next);
+                self.frac -= 1.0;
+            }
+
+            let f = self.frac;
+            for ch in 0..out_ch {
+                let (a, b) = remap(src_ch, out_ch, ch, &self.prev, &self.next);
+                let s = a as f32 + (b as f32 - a as f32) * f;
+                emit(s.clamp(-32768.0, 32767.0) as i16);
+            }
+            self.frac += ratio;
+        }
+    }
+}
+
+#[inline]
+fn remap(
+    src_ch: usize,
+    out_ch: usize,
+    ch: usize,
+    prev: &[i16; MAX_CHANNELS],
+    next: &[i16; MAX_CHANNELS],
+) -> (i16, i16) {
+    if src_ch == out_ch {
+        return (prev[ch], next[ch]);
+    }
+    if src_ch == 1 {
+        return (prev[0], next[0]);
+    }
+    if out_ch == 1 {
+        let mut p: i32 = 0;
+        let mut n: i32 = 0;
+        for i in 0..src_ch {
+            p += prev[i] as i32;
+            n += next[i] as i32;
+        }
+        let s = src_ch as i32;
+        return ((p / s) as i16, (n / s) as i16);
+    }
+    let i = ch.min(src_ch - 1);
+    (prev[i], next[i])
+}
 
 impl CpalSink {
     pub fn new(device_name: Option<String>) -> Self {
         Self {
             device_name,
-            ring: Mutex::new(Ring {
-                buf: VecDeque::with_capacity(RING_CAPACITY_BYTES),
-                closed: false,
-            }),
-            notify: Condvar::new(),
+            producer: Mutex::new(None),
+            stream: Mutex::new(None),
             src_rate: AtomicU32::new(0),
             src_channels: AtomicU32::new(0),
-            stream: Mutex::new(None),
             out_rate: AtomicU32::new(0),
             out_channels: AtomicU32::new(0),
         }
     }
 
-    fn open_stream(self: &std::sync::Arc<Self>) -> Result<()> {
-        tracing::info!("stream/cpal: open_stream begin (device={:?})", self.device_name);
+    fn open_stream(self: &Arc<Self>) -> Result<()> {
+        tracing::info!(
+            "stream/cpal: open_stream begin (device={:?})",
+            self.device_name
+        );
 
-        tracing::debug!("stream/cpal: cpal::default_host()");
         let host = cpal::default_host();
         tracing::info!("stream/cpal: host id = {:?}", host.id());
 
-        tracing::debug!("stream/cpal: selecting output device");
         let device = match self.device_name.as_deref() {
             None | Some("") => host
                 .default_output_device()
@@ -77,7 +191,6 @@ impl CpalSink {
         let device_name = device.name().unwrap_or_else(|_| "<unnamed>".to_string());
         tracing::info!("stream/cpal: selected device = {}", device_name);
 
-        tracing::debug!("stream/cpal: querying default_output_config()");
         let config = device
             .default_output_config()
             .context("cpal: default output config")?;
@@ -85,6 +198,11 @@ impl CpalSink {
         let stream_config: cpal::StreamConfig = config.into();
         let out_rate = stream_config.sample_rate.0;
         let out_channels = stream_config.channels as u32;
+        if out_channels as usize > MAX_CHANNELS {
+            return Err(anyhow!(
+                "cpal: device requests {out_channels} channels, max is {MAX_CHANNELS}"
+            ));
+        }
         tracing::info!(
             "stream/cpal: default config = {} Hz × {} ch, sample_format = {:?}",
             out_rate,
@@ -94,180 +212,126 @@ impl CpalSink {
         self.out_rate.store(out_rate, Ordering::SeqCst);
         self.out_channels.store(out_channels, Ordering::SeqCst);
 
-        let me = std::sync::Arc::clone(self);
+        let (producer, consumer) = RingBuffer::<i16>::new(RING_CAPACITY_SAMPLES);
+        *self.producer.lock().unwrap() = Some(producer);
+
         let err_fn = |e| tracing::error!("cpal stream error: {e}");
         let stream = match sample_format {
-            cpal::SampleFormat::F32 => device.build_output_stream(
-                &stream_config,
-                move |out: &mut [f32], _| me.fill_f32(out),
-                err_fn,
-                None,
-            ),
-            cpal::SampleFormat::I16 => device.build_output_stream(
-                &stream_config,
-                move |out: &mut [i16], _| me.fill_i16(out),
-                err_fn,
-                None,
-            ),
-            cpal::SampleFormat::U16 => device.build_output_stream(
-                &stream_config,
-                move |out: &mut [u16], _| me.fill_u16(out),
-                err_fn,
-                None,
-            ),
+            cpal::SampleFormat::F32 => {
+                let mut state = Resampler::new();
+                let mut consumer = consumer;
+                let shared = Arc::clone(self);
+                device.build_output_stream(
+                    &stream_config,
+                    move |out: &mut [f32], _| {
+                        let out_len = out.len();
+                        let src_rate = shared.src_rate.load(Ordering::Relaxed).max(1);
+                        let src_ch = (shared.src_channels.load(Ordering::Relaxed).max(1) as usize)
+                            .min(MAX_CHANNELS);
+                        let out_ch = shared.out_channels.load(Ordering::Relaxed).max(1) as usize;
+                        let ratio = src_rate as f32
+                            / shared.out_rate.load(Ordering::Relaxed).max(1) as f32;
+                        let frames = out_len / out_ch.max(1);
+                        let mut i = 0;
+                        state.fill(&mut consumer, src_rate, src_ch, out_ch, ratio, frames, |s| {
+                            if i < out_len {
+                                out[i] = s as f32 / 32768.0;
+                                i += 1;
+                            }
+                        });
+                        while i < out_len {
+                            out[i] = 0.0;
+                            i += 1;
+                        }
+                    },
+                    err_fn,
+                    None,
+                )
+            }
+            cpal::SampleFormat::I16 => {
+                let mut state = Resampler::new();
+                let mut consumer = consumer;
+                let shared = Arc::clone(self);
+                device.build_output_stream(
+                    &stream_config,
+                    move |out: &mut [i16], _| {
+                        let out_len = out.len();
+                        let src_rate = shared.src_rate.load(Ordering::Relaxed).max(1);
+                        let src_ch = (shared.src_channels.load(Ordering::Relaxed).max(1) as usize)
+                            .min(MAX_CHANNELS);
+                        let out_ch = shared.out_channels.load(Ordering::Relaxed).max(1) as usize;
+                        let ratio = src_rate as f32
+                            / shared.out_rate.load(Ordering::Relaxed).max(1) as f32;
+                        let frames = out_len / out_ch.max(1);
+                        let mut i = 0;
+                        state.fill(&mut consumer, src_rate, src_ch, out_ch, ratio, frames, |s| {
+                            if i < out_len {
+                                out[i] = s;
+                                i += 1;
+                            }
+                        });
+                        while i < out_len {
+                            out[i] = 0;
+                            i += 1;
+                        }
+                    },
+                    err_fn,
+                    None,
+                )
+            }
+            cpal::SampleFormat::U16 => {
+                let mut state = Resampler::new();
+                let mut consumer = consumer;
+                let shared = Arc::clone(self);
+                device.build_output_stream(
+                    &stream_config,
+                    move |out: &mut [u16], _| {
+                        let out_len = out.len();
+                        let src_rate = shared.src_rate.load(Ordering::Relaxed).max(1);
+                        let src_ch = (shared.src_channels.load(Ordering::Relaxed).max(1) as usize)
+                            .min(MAX_CHANNELS);
+                        let out_ch = shared.out_channels.load(Ordering::Relaxed).max(1) as usize;
+                        let ratio = src_rate as f32
+                            / shared.out_rate.load(Ordering::Relaxed).max(1) as f32;
+                        let frames = out_len / out_ch.max(1);
+                        let mut i = 0;
+                        state.fill(&mut consumer, src_rate, src_ch, out_ch, ratio, frames, |s| {
+                            if i < out_len {
+                                out[i] = (s as i32 + 32768) as u16;
+                                i += 1;
+                            }
+                        });
+                        while i < out_len {
+                            out[i] = 32768;
+                            i += 1;
+                        }
+                    },
+                    err_fn,
+                    None,
+                )
+            }
             other => return Err(anyhow!("cpal: unsupported sample format {other:?}")),
         }
         .context("cpal: build output stream")?;
-        tracing::info!("stream/cpal: build_output_stream ok, calling stream.play()");
-        stream.play().context("cpal: start stream")?;
-        tracing::info!("stream/cpal: stream.play() ok");
 
+        stream.play().context("cpal: start stream")?;
         *self.stream.lock().unwrap() = Some(StreamHolder(stream));
+
         tracing::info!(
             "stream/cpal: opened {} Hz × {} ch on {}",
             out_rate,
             out_channels,
-            self.device_name.as_deref().unwrap_or("(default)")
+            device_name
         );
         Ok(())
-    }
-
-    fn pop_frame_s16(&self, out_ch: usize) -> Option<Vec<i16>> {
-        let mut g = self.ring.lock().unwrap();
-        let src_ch = self.src_channels.load(Ordering::SeqCst).max(1) as usize;
-        let need = src_ch * 2; // bytes per frame
-        if g.buf.len() < need {
-            return None;
-        }
-        let mut frame = Vec::with_capacity(out_ch);
-        let mut samples = [0i16; 8];
-        for i in 0..src_ch {
-            let lo = g.buf.pop_front().unwrap();
-            let hi = g.buf.pop_front().unwrap();
-            samples[i.min(7)] = i16::from_le_bytes([lo, hi]);
-        }
-        // Up/down-mix to device channel count.
-        match (src_ch, out_ch) {
-            (s, o) if s == o => frame.extend_from_slice(&samples[..s]),
-            (1, o) => {
-                for _ in 0..o {
-                    frame.push(samples[0]);
-                }
-            }
-            (2, 1) => {
-                let mix = ((samples[0] as i32 + samples[1] as i32) / 2) as i16;
-                frame.push(mix);
-            }
-            (s, o) if s > o => frame.extend_from_slice(&samples[..o]),
-            (s, o) => {
-                for i in 0..o {
-                    frame.push(samples[i.min(s - 1)]);
-                }
-            }
-        }
-        self.notify.notify_all();
-        Some(frame)
-    }
-
-    /// Generic per-format fill, with linear-interp resample when src_rate ≠ out_rate.
-    fn fill_generic<F: FnMut(i16)>(&self, frames: usize, mut emit: F, out_ch: usize) {
-        let src_rate = self.src_rate.load(Ordering::SeqCst).max(1) as f32;
-        let out_rate = self.out_rate.load(Ordering::SeqCst).max(1) as f32;
-        let ratio = src_rate / out_rate;
-        if (ratio - 1.0).abs() < 1e-3 {
-            for _ in 0..frames {
-                let Some(frame) = self.pop_frame_s16(out_ch) else {
-                    for _ in 0..out_ch {
-                        emit(0);
-                    }
-                    continue;
-                };
-                for s in frame {
-                    emit(s);
-                }
-            }
-        } else {
-            // Naive nearest-neighbour: pop one source frame per `ratio` output
-            // frames. Cheap and "good enough" for casual playback; replace with
-            // a proper resampler later if quality matters.
-            let mut accum: f32 = 0.0;
-            let mut last = vec![0i16; out_ch];
-            for _ in 0..frames {
-                accum += ratio;
-                while accum >= 1.0 {
-                    if let Some(frame) = self.pop_frame_s16(out_ch) {
-                        last = frame;
-                    }
-                    accum -= 1.0;
-                }
-                for &s in &last {
-                    emit(s);
-                }
-            }
-        }
-    }
-
-    fn fill_f32(&self, out: &mut [f32]) {
-        let ch = self.out_channels.load(Ordering::SeqCst) as usize;
-        let frames = out.len() / ch.max(1);
-        let mut i = 0;
-        self.fill_generic(
-            frames,
-            |s| {
-                out[i] = s as f32 / 32768.0;
-                i += 1;
-            },
-            ch,
-        );
-        while i < out.len() {
-            out[i] = 0.0;
-            i += 1;
-        }
-    }
-
-    fn fill_i16(&self, out: &mut [i16]) {
-        let ch = self.out_channels.load(Ordering::SeqCst) as usize;
-        let frames = out.len() / ch.max(1);
-        let mut i = 0;
-        self.fill_generic(
-            frames,
-            |s| {
-                out[i] = s;
-                i += 1;
-            },
-            ch,
-        );
-        while i < out.len() {
-            out[i] = 0;
-            i += 1;
-        }
-    }
-
-    fn fill_u16(&self, out: &mut [u16]) {
-        let ch = self.out_channels.load(Ordering::SeqCst) as usize;
-        let frames = out.len() / ch.max(1);
-        let mut i = 0;
-        self.fill_generic(
-            frames,
-            |s| {
-                out[i] = (s as i32 + 32768) as u16;
-                i += 1;
-            },
-            ch,
-        );
-        while i < out.len() {
-            out[i] = 32768;
-            i += 1;
-        }
     }
 }
 
 impl AudioSink for CpalSink {
     fn set_format(&self, fmt: PcmFormat) -> Result<()> {
         self.src_rate.store(fmt.sample_rate, Ordering::SeqCst);
-        self.src_channels.store(fmt.channels as u32, Ordering::SeqCst);
-        // Lazy open on first set_format — Self::open_stream needs Arc<Self>,
-        // so this is done in CpalSink::ensure_open via the player wrapper.
+        self.src_channels
+            .store(fmt.channels as u32, Ordering::SeqCst);
         Ok(())
     }
 
@@ -275,45 +339,46 @@ impl AudioSink for CpalSink {
         if samples.is_empty() {
             return Ok(());
         }
-        let mut g = self.ring.lock().unwrap();
-        // Apply back-pressure: wait until ring has room.
-        loop {
-            if g.closed {
-                return Ok(());
+        let mut written = 0;
+        while written < samples.len() {
+            let mut guard = self.producer.lock().unwrap();
+            let producer = match guard.as_mut() {
+                Some(p) => p,
+                None => return Ok(()),
+            };
+            let slots = producer.slots();
+            if slots == 0 {
+                drop(guard);
+                std::thread::sleep(std::time::Duration::from_millis(5));
+                continue;
             }
-            let avail = RING_CAPACITY_BYTES - g.buf.len();
-            if avail >= samples.len() * 2 {
-                break;
-            }
-            g = self
-                .notify
-                .wait_timeout(g, std::time::Duration::from_millis(50))
-                .unwrap()
-                .0;
-        }
-        for s in samples {
-            let [lo, hi] = s.to_le_bytes();
-            g.buf.push_back(lo);
-            g.buf.push_back(hi);
+            let n = (samples.len() - written).min(slots);
+            // write_chunk gives us two contiguous slices (the ring may wrap)
+            // and lets us memcpy in bulk rather than push() per sample.
+            let mut chunk = producer
+                .write_chunk(n)
+                .expect("slots checked >= n above");
+            let (a, b) = chunk.as_mut_slices();
+            let split = a.len();
+            a.copy_from_slice(&samples[written..written + split]);
+            b.copy_from_slice(&samples[written + split..written + n]);
+            chunk.commit_all();
+            written += n;
         }
         Ok(())
     }
 
     fn close(&self) {
-        {
-            let mut g = self.ring.lock().unwrap();
-            g.closed = true;
-            self.notify.notify_all();
-        }
         *self.stream.lock().unwrap() = None;
+        *self.producer.lock().unwrap() = None;
     }
 }
 
 /// Factory used by the player: builds an `Arc<CpalSink>` and opens the cpal
-/// stream eagerly so device-not-found errors surface to the gRPC caller before
-/// `play()` returns success.
-pub fn build(device: Option<String>) -> Result<std::sync::Arc<CpalSink>> {
-    let sink = std::sync::Arc::new(CpalSink::new(device));
+/// stream eagerly so device-not-found errors surface to the gRPC caller
+/// before `play()` returns success.
+pub fn build(device: Option<String>) -> Result<Arc<CpalSink>> {
+    let sink = Arc::new(CpalSink::new(device));
     sink.open_stream()?;
     Ok(sink)
 }
