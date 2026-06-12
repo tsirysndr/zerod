@@ -14,7 +14,7 @@ use tokio::task::JoinHandle;
 use crate::alsa_sink;
 #[cfg(not(target_os = "linux"))]
 use crate::cpal_sink;
-use crate::decoder::decode_segment;
+use crate::decoder::StreamDecoder;
 use crate::demux;
 use crate::fetcher::{self, SegmentCache};
 use crate::manifest::{self, ManifestKind};
@@ -354,6 +354,46 @@ async fn run_player_inner(player: &Arc<Player>) -> Result<()> {
         None
     };
 
+    // Continuous decode: one `StreamDecoder` instance for the whole stream
+    // so the AAC decoder's internal state (encoder priming, predictor
+    // history, SBR/PS continuity) persists across segments. Without this,
+    // every segment boundary is a click. Fetching still runs in the
+    // background — we just decode serially in the main task because the
+    // decoder is stateful.
+    let mut stream_decoder = StreamDecoder::new();
+    let snap_is_live = snap.is_live;
+    let spawn_fetch = |seq: u64| -> JoinHandle<Result<Option<Bytes>>> {
+        let client = client.clone();
+        let cache = cache.clone();
+        let known = known.clone();
+        tokio::spawn(async move {
+            let seg = loop {
+                let found = {
+                    let g = known.lock().unwrap();
+                    g.iter().find(|s| s.seq == seq).cloned()
+                };
+                if let Some(s) = found {
+                    break s;
+                }
+                if !snap_is_live {
+                    return Ok(None);
+                }
+                tokio::time::sleep(Duration::from_millis(200)).await;
+            };
+            let bytes = match cache.get(seg.seq).await {
+                Some(b) => b,
+                None => {
+                    let b = fetcher::fetch_bytes(&client, &seg.url).await?;
+                    cache.put(seg.seq, b.clone()).await;
+                    b
+                }
+            };
+            Ok(Some(bytes))
+        })
+    };
+
+    let mut pending_fetch = spawn_fetch(next_play_seq);
+
     loop {
         if player.stop_flag.load(Ordering::SeqCst) {
             break;
@@ -363,38 +403,42 @@ async fn run_player_inner(player: &Arc<Player>) -> Result<()> {
             continue;
         }
 
-        let seg = {
-            let g = known.lock().unwrap();
-            g.iter().find(|s| s.seq == next_play_seq).cloned()
-        };
-        let Some(seg) = seg else {
-            if snap.is_live {
-                tokio::time::sleep(Duration::from_millis(200)).await;
+        let bytes = match pending_fetch.await {
+            Ok(Ok(Some(b))) => b,
+            Ok(Ok(None)) => break, // VOD end of stream.
+            Ok(Err(e)) => {
+                tracing::warn!(
+                    "stream: fetch seg {} failed: {e}; skipping",
+                    next_play_seq
+                );
+                next_play_seq += 1;
+                pending_fetch = spawn_fetch(next_play_seq);
                 continue;
             }
-            break;
+            Err(e) => return Err(anyhow!("fetch task join: {e}")),
         };
 
-        let bytes = match cache.get(seg.seq).await {
-            Some(b) => b,
-            None => match fetcher::fetch_bytes(&client, &seg.url).await {
-                Ok(b) => {
-                    cache.put(seg.seq, b.clone()).await;
-                    b
-                }
-                Err(e) => {
-                    tracing::warn!("stream: fetch seg {} failed: {e}; skipping", seg.seq);
-                    next_play_seq += 1;
-                    continue;
-                }
-            },
-        };
+        // Kick off the next fetch in the background while we decode + write.
+        let decoding_seq = next_play_seq;
+        next_play_seq += 1;
+        pending_fetch = spawn_fetch(next_play_seq);
 
-        let decoded = match decode_segment(init_bytes.as_deref(), &bytes) {
+        // Background prefetch for N+2..N+4 so the upcoming spawn_fetch hits cache.
+        let upcoming: Vec<_> = {
+            let g = known.lock().unwrap();
+            g.iter()
+                .filter(|s| s.seq > next_play_seq && s.seq <= next_play_seq + 3)
+                .cloned()
+                .collect()
+        };
+        tokio::spawn(fetcher::prefetch(client.clone(), cache.clone(), upcoming));
+
+        let decoded = match stream_decoder.decode_segment(init_bytes.as_deref(), &bytes) {
             Ok(d) => d,
             Err(e) => {
-                tracing::warn!("stream: decode seg {} failed: {e}; skipping", seg.seq);
-                next_play_seq += 1;
+                tracing::warn!(
+                    "stream: decode seg {decoding_seq} failed: {e}; skipping"
+                );
                 continue;
             }
         };
@@ -430,22 +474,6 @@ async fn run_player_inner(player: &Arc<Player>) -> Result<()> {
             let ms = (frames_pushed as i64 * 1000) / decoded.sample_rate.max(1) as i64;
             player.position_ms.fetch_add(ms, Ordering::SeqCst);
         }
-
-        let upcoming: Vec<_> = {
-            let g = known.lock().unwrap();
-            g.iter()
-                .filter(|s| s.seq > next_play_seq && s.seq <= next_play_seq + 3)
-                .cloned()
-                .collect()
-        };
-        // Fire-and-forget: don't make the playback loop wait for the next
-        // 3 segments to land before moving on. Cache miss in the loop above
-        // still falls back to a synchronous fetch, so correctness is
-        // preserved — this just removes the per-segment HTTP latency from
-        // the gap between writes.
-        tokio::spawn(fetcher::prefetch(client.clone(), cache.clone(), upcoming));
-
-        next_play_seq += 1;
     }
 
     if let Some(h) = refresher {

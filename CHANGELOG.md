@@ -8,6 +8,35 @@ Pre-1.0, breaking changes may land in any minor release.
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-06-12
+
+### Fixed
+
+- **HLS playback on macOS no longer clicks/jumps every few seconds.**
+  Four cumulative fixes, in order of audible impact:
+  - **Continuous decode across HLS segments.** `decode_segment` is now
+    a `StreamDecoder` struct that owns one `Box<dyn Decoder>` for the
+    whole stream. The format reader is still rebuilt per segment, but
+    the AAC decoder's state (predictor history, SBR/PS continuity,
+    encoder priming) persists — so the ~50 ms of priming silence /
+    decoder warm-up no longer reappears at every segment boundary.
+    This is the model ffplay uses against libavcodec.
+  - **`CpalSink` rewrite.** Replaced `Mutex<VecDeque<u8>>` + `Condvar`
+    with an `rtrb` lock-free SPSC ring and moved the consumer half
+    into the cpal callback. The CoreAudio realtime thread now does
+    zero locks, allocations, or syscalls per buffer. Resampler upgraded
+    from nearest-neighbour (which audibly aliased 44.1 → 48 kHz) to
+    linear interpolation between adjacent source frames.
+  - **1.5 s sink pre-buffer.** Resampler waits for ~1.5 s of source
+    frames before priming so brief producer hiccups can't immediately
+    underrun. Ring capacity bumped to 512 K samples so the bigger
+    pre-buffer fits well under the 50 % cap.
+  - **Background per-segment prefetch.** The playback loop no longer
+    `.await`s `fetcher::prefetch`; it's `tokio::spawn`-ed instead, so
+    HTTP latency for upcoming segments is hidden from the gap between
+    writes. Cache miss in the main loop still falls back to a
+    synchronous fetch, so correctness is preserved.
+
 ## [0.3.0] - 2026-06-11
 
 ### Added
